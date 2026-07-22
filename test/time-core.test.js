@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  buildDateBoundarySample,
+  buildNtpSample,
   buildSample,
   parseHttpDate,
   parsePinduoduoBody,
@@ -29,5 +31,40 @@ test("builds offsets from the request midpoint and keeps the fastest sample", ()
   const faster = buildSample(2000, 1000, 1020, strategy);
 
   assert.equal(faster.offsetMs, 990);
+  assert.equal(faster.uncertaintyMs, 10);
   assert.equal(selectBestSample([slower, faster]), faster);
+});
+
+test("builds an error-bounded millisecond sample from a Date boundary", () => {
+  const strategy = {
+    id: "meituan-phase",
+    label: "美团官网相位校准",
+    precisionLabel: "毫秒校准",
+  };
+  const sample = buildDateBoundarySample(
+    { remoteEpochMs: 2000, startedAtMs: 1080, finishedAtMs: 1100 },
+    { remoteEpochMs: 3000, startedAtMs: 1180, finishedAtMs: 1200 },
+    strategy,
+  );
+
+  assert.equal(sample.offsetMs, 1860);
+  assert.equal(sample.calibrationWindowMs, 120);
+  assert.equal(sample.uncertaintyMs, 60);
+  assert.throws(
+    () => buildDateBoundarySample(
+      { remoteEpochMs: 2000, startedAtMs: 1080, finishedAtMs: 1100 },
+      { remoteEpochMs: 4000, startedAtMs: 1180, finishedAtMs: 1200 },
+      strategy,
+    ),
+  );
+});
+
+test("keeps the NTP command's local timing sample", () => {
+  const sample = buildNtpSample(
+    { checkedAtEpochMs: 1020, offsetMs: 990, roundTripMs: 20 },
+    { id: "ntsc-ntp", label: "国家授时中心 NTP", precisionLabel: "毫秒级" },
+  );
+
+  assert.equal(sample.offsetMs, 990);
+  assert.equal(sample.uncertaintyMs, 10);
 });

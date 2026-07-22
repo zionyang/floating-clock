@@ -1,10 +1,10 @@
 {
   "name": "floating-clock",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A lightweight Windows floating clock with marketplace time-source switching and countdown mode.",
   "scripts": {
     "dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:build": "pwsh -NoProfile -File build.ps1",
     "test": "node --test"
   },
   "devDependencies": {

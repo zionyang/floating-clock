@@ -1,4 +1,6 @@
 const {
+  buildDateBoundarySample,
+  buildNtpSample,
   buildSample,
   parseHttpDate,
   parsePinduoduoBody,
@@ -8,36 +10,36 @@ const {
 } = typeof module !== "undefined" ? require("./time-core") : window.timeCore;
 
 const SAMPLE_COUNT = 3;
-const REQUEST_TIMEOUT_MS = 3500;
+const PHASE_PROBE_COUNT = 14;
+const PHASE_PROBE_DELAY_MS = 80;
+const MAX_PHASE_UNCERTAINTY_MS = 100;
 
 const sources = {
   beijing: {
     id: "beijing",
     label: "北京时间",
-    description: "国家授时中心响应头",
+    description: "国家授时中心 NTP",
     strategies: [
       {
-        id: "ntsc-date",
-        label: "国家授时中心 Date",
-        precisionLabel: "秒级",
-        method: "HEAD",
-        url: "https://www.ntsc.ac.cn/",
-        parse: ({ headers }) => parseHttpDate(headers),
+        id: "ntsc-ntp",
+        label: "国家授时中心 NTP",
+        precisionLabel: "毫秒级",
+        type: "ntp",
       },
     ],
   },
   jd: {
     id: "jd",
     label: "京东时间",
-    description: "京东 API 响应头",
+    description: "京东 API 秒边界校准",
     strategies: [
       {
-        id: "jd-date",
-        label: "京东 API Date",
-        precisionLabel: "秒级",
+        id: "jd-phase",
+        label: "京东 API 相位校准",
+        precisionLabel: "毫秒校准",
+        type: "date-boundary",
         method: "GET",
         url: "https://api.m.jd.com/",
-        parse: ({ headers }) => parseHttpDate(headers),
       },
     ],
   },
@@ -63,12 +65,12 @@ const sources = {
         parse: ({ headers }) => parsePinduoduoYakTime(headers),
       },
       {
-        id: "pdd-date",
-        label: "拼多多 Date",
-        precisionLabel: "秒级",
-        method: "HEAD",
+        id: "pdd-phase",
+        label: "拼多多 Date 相位校准",
+        precisionLabel: "毫秒校准",
+        type: "date-boundary",
+        method: "GET",
         url: "https://www.pinduoduo.com/",
-        parse: ({ headers }) => parseHttpDate(headers),
       },
     ],
   },
@@ -86,12 +88,57 @@ const sources = {
         parse: ({ body }) => parseTaobaoBody(body),
       },
       {
-        id: "taobao-date",
-        label: "淘宝 Date",
-        precisionLabel: "秒级",
-        method: "HEAD",
+        id: "taobao-phase",
+        label: "淘宝 Date 相位校准",
+        precisionLabel: "毫秒校准",
+        type: "date-boundary",
+        method: "GET",
         url: "https://www.taobao.com/",
-        parse: ({ headers }) => parseHttpDate(headers),
+      },
+    ],
+  },
+  meituan: {
+    id: "meituan",
+    label: "美团时间",
+    description: "美团官网秒边界校准",
+    strategies: [
+      {
+        id: "meituan-phase",
+        label: "美团官网相位校准",
+        precisionLabel: "毫秒校准",
+        type: "date-boundary",
+        method: "GET",
+        url: "https://www.meituan.com/",
+      },
+    ],
+  },
+  "meituan-flash": {
+    id: "meituan-flash",
+    label: "美团闪购时间",
+    description: "美团闪购官网秒边界校准",
+    strategies: [
+      {
+        id: "meituan-flash-phase",
+        label: "美团闪购相位校准",
+        precisionLabel: "毫秒校准",
+        type: "date-boundary",
+        method: "GET",
+        url: "https://brandhub.meituan.com/",
+      },
+    ],
+  },
+  "taobao-flash": {
+    id: "taobao-flash",
+    label: "淘宝闪购时间",
+    description: "淘宝闪购官网秒边界校准",
+    strategies: [
+      {
+        id: "taobao-flash-phase",
+        label: "淘宝闪购相位校准",
+        precisionLabel: "毫秒校准",
+        type: "date-boundary",
+        method: "GET",
+        url: "https://www.ele.me/",
       },
     ],
   },
@@ -116,8 +163,9 @@ async function synchronizeSource(sourceId) {
 
   for (const strategy of source.strategies) {
     const samples = [];
+    const sampleCount = strategy.type === "date-boundary" ? 1 : SAMPLE_COUNT;
 
-    for (let attempt = 0; attempt < SAMPLE_COUNT; attempt += 1) {
+    for (let attempt = 0; attempt < sampleCount; attempt += 1) {
       try {
         samples.push(await collectSample(strategy));
       } catch (error) {
@@ -138,6 +186,45 @@ async function synchronizeSource(sourceId) {
 }
 
 async function collectSample(strategy) {
+  if (strategy.type === "ntp") {
+    return collectNtpSample(strategy);
+  }
+
+  if (strategy.type === "date-boundary") {
+    return collectDateBoundarySample(strategy);
+  }
+
+  return collectHttpSample(strategy);
+}
+
+async function collectNtpSample(strategy) {
+  return buildNtpSample(await window.floatingClock.requestNtpTime(), strategy);
+}
+
+async function collectDateBoundarySample(strategy) {
+  let previous;
+
+  for (let attempt = 0; attempt < PHASE_PROBE_COUNT; attempt += 1) {
+    const current = await collectHttpDateSample(strategy);
+
+    if (previous && current.remoteEpochMs === previous.remoteEpochMs + 1000) {
+      const sample = buildDateBoundarySample(previous, current, strategy);
+      if (sample.uncertaintyMs <= MAX_PHASE_UNCERTAINTY_MS) {
+        return sample;
+      }
+    }
+
+    previous = current;
+
+    if (attempt < PHASE_PROBE_COUNT - 1) {
+      await delay(PHASE_PROBE_DELAY_MS);
+    }
+  }
+
+  throw new Error(`${strategy.label} did not produce a ${MAX_PHASE_UNCERTAINTY_MS} ms phase window.`);
+}
+
+async function collectHttpSample(strategy) {
   const startedAtMs = Date.now();
   const response = await requestText(strategy);
   const finishedAtMs = Date.now();
@@ -150,44 +237,38 @@ async function collectSample(strategy) {
   return buildSample(remoteEpochMs, startedAtMs, finishedAtMs, strategy);
 }
 
-function requestText(strategy) {
-  if (typeof window !== "undefined") {
-    return window.floatingClock.requestTime(strategy.id);
+async function collectHttpDateSample(strategy) {
+  const startedAtMs = Date.now();
+  const response = await requestText(strategy);
+  const finishedAtMs = Date.now();
+
+  if (response.statusCode < 200 || response.statusCode >= 400) {
+    throw new Error(`HTTP ${response.statusCode}`);
   }
 
-  const { request } = require("node:https");
-  return new Promise((resolve, reject) => {
-    const clientRequest = request(
-      strategy.url,
-      {
-        method: strategy.method,
-        headers: {
-          "Cache-Control": "no-cache",
-          "User-Agent": "FloatingClock/0.1",
-        },
-        timeout: REQUEST_TIMEOUT_MS,
-      },
-      (response) => {
-        const chunks = [];
+  const age = getHeader(response.headers, "age");
+  if (age !== undefined && (!Number.isFinite(Number(age)) || Number(age) > 0)) {
+    throw new Error("Cached HTTP response.");
+  }
 
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => chunks.push(chunk));
-        response.on("end", () => {
-          resolve({
-            body: chunks.join(""),
-            headers: response.headers,
-            statusCode: response.statusCode || 0,
-          });
-        });
-      },
-    );
+  return {
+    startedAtMs,
+    finishedAtMs,
+    remoteEpochMs: parseHttpDate(response.headers),
+  };
+}
 
-    clientRequest.on("timeout", () => {
-      clientRequest.destroy(new Error("Request timed out."));
-    });
-    clientRequest.on("error", reject);
-    clientRequest.end();
-  });
+function requestText(strategy) {
+  return window.floatingClock.requestTime(strategy.id);
+}
+
+function getHeader(headers, name) {
+  const value = headers[name];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 const timeSources = {

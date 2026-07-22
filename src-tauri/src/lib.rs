@@ -1,7 +1,11 @@
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
+    net::UdpSocket,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        OnceLock,
+    },
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use serde::Serialize;
@@ -15,6 +19,11 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_window_state::StateFlags;
 
 const SHORTCUT: &str = "Ctrl+Alt+T";
+const NTP_SERVER: &str = "ntp.ntsc.ac.cn:123";
+const NTP_PACKET_LENGTH: usize = 48;
+const NTP_UNIX_EPOCH_SECONDS: u64 = 2_208_988_800;
+
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 #[derive(Default)]
 struct ControlsState {
@@ -44,17 +53,29 @@ struct HttpResponse {
     status_code: u16,
 }
 
-fn strategy_request(strategy_id: &str) -> Option<(&'static str, &'static str)> {
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NtpResponse {
+    checked_at_epoch_ms: i64,
+    offset_ms: i64,
+    round_trip_ms: i64,
+}
+
+fn strategy_request(strategy_id: &str) -> Option<(&'static str, &'static str, bool)> {
     match strategy_id {
-        "ntsc-date" => Some(("HEAD", "https://www.ntsc.ac.cn/")),
-        "jd-date" => Some(("GET", "https://api.m.jd.com/")),
-        "pdd-server-time" => Some(("GET", "https://api.pinduoduo.com/api/server/_stm")),
-        "pdd-yak-time" | "pdd-date" => Some(("HEAD", "https://www.pinduoduo.com/")),
+        "jd-phase" => Some(("GET", "https://api.m.jd.com/", true)),
+        "pdd-server-time" => Some(("GET", "https://api.pinduoduo.com/api/server/_stm", false)),
+        "pdd-yak-time" => Some(("HEAD", "https://www.pinduoduo.com/", false)),
+        "pdd-phase" => Some(("GET", "https://www.pinduoduo.com/", true)),
         "taobao-timestamp" => Some((
             "GET",
             "https://h5api.m.taobao.com/h5/mtop.common.gettimestamp/1.0/",
+            false,
         )),
-        "taobao-date" => Some(("HEAD", "https://www.taobao.com/")),
+        "taobao-phase" => Some(("GET", "https://www.taobao.com/", true)),
+        "meituan-phase" => Some(("GET", "https://www.meituan.com/", true)),
+        "meituan-flash-phase" => Some(("GET", "https://brandhub.meituan.com/", true)),
+        "taobao-flash-phase" => Some(("GET", "https://www.ele.me/", true)),
         _ => None,
     }
 }
@@ -176,25 +197,155 @@ fn quit(app: AppHandle) {
     app.exit(0);
 }
 
-#[tauri::command]
-async fn request_time(strategy_id: String) -> Result<HttpResponse, String> {
-    let (method, url) = strategy_request(&strategy_id).ok_or("unknown time strategy")?;
+fn epoch_ms() -> Result<i64, String> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?;
+    i64::try_from(duration.as_millis()).map_err(|error| error.to_string())
+}
+
+fn ntp_timestamp(packet: &[u8], offset: usize) -> Result<i64, String> {
+    if packet.len() < offset + 8 {
+        return Err("incomplete NTP timestamp".to_owned());
+    }
+
+    let seconds = u32::from_be_bytes([
+        packet[offset],
+        packet[offset + 1],
+        packet[offset + 2],
+        packet[offset + 3],
+    ]) as u64;
+    let fraction = u32::from_be_bytes([
+        packet[offset + 4],
+        packet[offset + 5],
+        packet[offset + 6],
+        packet[offset + 7],
+    ]) as u64;
+    let unix_seconds = seconds
+        .checked_sub(NTP_UNIX_EPOCH_SECONDS)
+        .ok_or("invalid NTP epoch")?;
+    let milliseconds = unix_seconds
+        .checked_mul(1000)
+        .and_then(|value| value.checked_add(fraction * 1000 / 4_294_967_296))
+        .ok_or("NTP timestamp overflow")?;
+
+    i64::try_from(milliseconds).map_err(|error| error.to_string())
+}
+
+fn ntp_request_timestamp(epoch_ms: i64) -> Result<[u8; 8], String> {
+    let epoch_ms = u64::try_from(epoch_ms).map_err(|error| error.to_string())?;
+    let seconds = (epoch_ms / 1000)
+        .checked_add(NTP_UNIX_EPOCH_SECONDS)
+        .ok_or("NTP timestamp overflow")?;
+    let seconds = u32::try_from(seconds).map_err(|error| error.to_string())?;
+    let fraction = ((epoch_ms % 1000) * 4_294_967_296 / 1000) as u32;
+    let mut timestamp = [0_u8; 8];
+    timestamp[..4].copy_from_slice(&seconds.to_be_bytes());
+    timestamp[4..].copy_from_slice(&fraction.to_be_bytes());
+    Ok(timestamp)
+}
+
+fn http_client() -> Result<&'static reqwest::Client, String> {
+    if let Some(client) = HTTP_CLIENT.get() {
+        return Ok(client);
+    }
+
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(3500))
         .build()
         .map_err(|error| error.to_string())?;
-    let response = client
+    let _ = HTTP_CLIENT.set(client);
+    HTTP_CLIENT
+        .get()
+        .ok_or("HTTP client initialization failed".to_owned())
+}
+
+fn cache_busted_url(url: &str) -> Result<String, String> {
+    let separator = if url.contains('?') { '&' } else { '?' };
+    Ok(format!("{url}{separator}clock_probe={}", epoch_ms()?))
+}
+
+#[tauri::command]
+async fn request_ntp_time() -> Result<NtpResponse, String> {
+    tauri::async_runtime::spawn_blocking(request_ntp_time_blocking)
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+fn request_ntp_time_blocking() -> Result<NtpResponse, String> {
+    let socket = UdpSocket::bind("0.0.0.0:0").map_err(|error| error.to_string())?;
+    socket
+        .set_read_timeout(Some(Duration::from_millis(1500)))
+        .map_err(|error| error.to_string())?;
+    socket
+        .set_write_timeout(Some(Duration::from_millis(1500)))
+        .map_err(|error| error.to_string())?;
+    socket
+        .connect(NTP_SERVER)
+        .map_err(|error| error.to_string())?;
+
+    let mut request = [0_u8; NTP_PACKET_LENGTH];
+    request[0] = 0x1b;
+    let started_at_epoch_ms = epoch_ms()?;
+    request[40..].copy_from_slice(&ntp_request_timestamp(started_at_epoch_ms)?);
+    socket.send(&request).map_err(|error| error.to_string())?;
+
+    let mut response = [0_u8; NTP_PACKET_LENGTH];
+    let response_length = socket
+        .recv(&mut response)
+        .map_err(|error| error.to_string())?;
+    let finished_at_epoch_ms = epoch_ms()?;
+
+    if response_length < NTP_PACKET_LENGTH {
+        return Err("incomplete NTP response".to_owned());
+    }
+    if response[1] == 0 || response[0] & 0b111 != 4 {
+        return Err("invalid NTP server response".to_owned());
+    }
+    if response[24..32] != request[40..48] {
+        return Err("NTP response did not match the request".to_owned());
+    }
+
+    let server_received_at_epoch_ms = ntp_timestamp(&response, 32)?;
+    let server_transmitted_at_epoch_ms = ntp_timestamp(&response, 40)?;
+    let server_processing_ms = server_transmitted_at_epoch_ms - server_received_at_epoch_ms;
+    let round_trip_ms = (finished_at_epoch_ms - started_at_epoch_ms - server_processing_ms).max(0);
+    let offset_ms = ((server_received_at_epoch_ms - started_at_epoch_ms)
+        + (server_transmitted_at_epoch_ms - finished_at_epoch_ms))
+        / 2;
+
+    Ok(NtpResponse {
+        checked_at_epoch_ms: finished_at_epoch_ms,
+        offset_ms,
+        round_trip_ms,
+    })
+}
+
+#[tauri::command]
+async fn request_time(strategy_id: String) -> Result<HttpResponse, String> {
+    let (method, url, cache_bust) =
+        strategy_request(&strategy_id).ok_or("unknown time strategy")?;
+    let request_url = if cache_bust {
+        cache_busted_url(url)?
+    } else {
+        url.to_owned()
+    };
+    let timeout_ms = if cache_bust { 1000 } else { 3500 };
+    let mut request = http_client()?
         .request(
             method
                 .parse()
                 .map_err(|error| format!("invalid method: {error}"))?,
-            url,
+            request_url,
         )
         .header("Cache-Control", "no-cache")
         .header("User-Agent", "FloatingClock/0.1")
-        .send()
-        .await
-        .map_err(|error| error.to_string())?;
+        .timeout(Duration::from_millis(timeout_ms));
+
+    if cache_bust {
+        request = request.header("Pragma", "no-cache");
+    }
+
+    let response = request.send().await.map_err(|error| error.to_string())?;
     let status_code = response.status().as_u16();
     let headers = response
         .headers()
@@ -355,6 +506,7 @@ pub fn run() {
             get_window_controls,
             hide_window,
             quit,
+            request_ntp_time,
             request_time,
             set_launch_at_login,
             set_topmost,
@@ -376,12 +528,23 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{should_hide_window_for_shortcut, strategy_request};
+    use super::{
+        ntp_request_timestamp, ntp_timestamp, should_hide_window_for_shortcut, strategy_request,
+    };
 
     #[test]
     fn network_command_only_accepts_known_time_strategies() {
         assert!(strategy_request("taobao-timestamp").is_some());
+        assert!(strategy_request("meituan-flash-phase").is_some());
         assert!(strategy_request("https://example.com").is_none());
+    }
+
+    #[test]
+    fn parses_fractional_ntp_timestamps() {
+        let mut packet = [0_u8; 48];
+        packet[40..48].copy_from_slice(&ntp_request_timestamp(1_700_000_000_500).unwrap());
+
+        assert_eq!(ntp_timestamp(&packet, 40).unwrap(), 1_700_000_000_500);
     }
 
     #[test]

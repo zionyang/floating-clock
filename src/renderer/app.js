@@ -136,10 +136,12 @@ async function syncSelectedSource() {
     state.offsetSourceId = syncResult.sourceId;
     state.hasValidOffset = true;
     updateTargetInputMinimum();
-    elements.syncStatus.textContent =
-      `${syncResult.sourceLabel} · ${syncResult.strategyLabel} · RTT ${syncResult.roundTripMs} ms`;
+    const quality = syncResult.calibrationWindowMs === undefined
+      ? `RTT ${syncResult.roundTripMs} ms`
+      : `校准窗 ${syncResult.calibrationWindowMs} ms`;
+    elements.syncStatus.textContent = `${syncResult.sourceLabel} · ${syncResult.strategyLabel} · ${quality}`;
     elements.offsetStatus.textContent =
-      `${syncResult.precisionLabel} · 偏移 ${formatSignedMs(syncResult.offsetMs)}`;
+      `${syncResult.precisionLabel} · 误差 ±${syncResult.uncertaintyMs} ms · 偏移 ${formatSignedMs(syncResult.offsetMs)}`;
   } catch (error) {
     elements.syncStatus.textContent = `${getSelectedSource()?.label || "时间源"}校准失败`;
 

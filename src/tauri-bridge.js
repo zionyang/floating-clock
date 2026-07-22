@@ -11,6 +11,7 @@
     minimize: () => invoke("hide_window"),
     getSources: () => Promise.resolve(window.timeSources.getPublicSources()),
     syncSource: (sourceId) => window.timeSources.synchronizeSource(sourceId),
+    requestNtpTime: () => invoke("request_ntp_time"),
     requestTime: (strategyId) => invoke("request_time", { strategyId }),
     getWindowControls: () => invoke("get_window_controls"),
     setLaunchAtLogin: (enabled) => invoke("set_launch_at_login", { enabled }),
