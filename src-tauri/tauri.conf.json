@@ -15,7 +15,7 @@
         "url": "renderer/index.html",
         "title": "悬浮时钟",
         "width": 392,
-        "height": 368,
+        "height": 392,
         "resizable": false,
         "maximizable": false,
         "decorations": false,

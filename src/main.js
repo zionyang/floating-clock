@@ -15,7 +15,7 @@ const { getPublicSources, synchronizeSource } = require("./time-sources");
 const TOGGLE_SHORTCUT = "CommandOrControl+Alt+T";
 const WINDOW_SIZE = {
   width: 392,
-  height: 368,
+  height: 392,
 };
 const MIN_VISIBLE_PIXELS = 56;
 
