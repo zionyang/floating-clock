@@ -12,6 +12,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_window_state::StateFlags;
 
 const SHORTCUT: &str = "Ctrl+Alt+T";
 
@@ -326,7 +327,21 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(StateFlags::POSITION)
+                .build(),
+        )
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry, ()>::new("show-main-on-ready")
+                .on_window_ready(|window| {
+                    if window.label() == "main" {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                })
+                .build(),
+        )
         .manage(ControlsState {
             topmost: AtomicBool::new(true),
             click_through: AtomicBool::new(false),
