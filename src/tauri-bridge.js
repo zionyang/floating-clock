@@ -7,7 +7,7 @@
   const { listen } = window.__TAURI__.event;
 
   window.floatingClock = {
-    close: () => invoke("hide_window"),
+    close: () => invoke("quit"),
     minimize: () => invoke("hide_window"),
     getSources: () => Promise.resolve(window.timeSources.getPublicSources()),
     syncSource: (sourceId) => window.timeSources.synchronizeSource(sourceId),

@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WindowEvent,
+    AppHandle, Emitter, Manager,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -169,6 +169,11 @@ fn hide_window(app: AppHandle) -> Result<(), String> {
         .ok_or("main window is unavailable")?
         .hide()
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn quit(app: AppHandle) {
+    app.exit(0);
 }
 
 #[tauri::command]
@@ -349,6 +354,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_window_controls,
             hide_window,
+            quit,
             request_time,
             set_launch_at_login,
             set_topmost,
@@ -363,12 +369,6 @@ pub fn run() {
             };
             setup_tray(app, shortcut_available)?;
             Ok(())
-        })
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
-            }
         })
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");

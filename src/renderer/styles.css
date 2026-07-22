@@ -39,6 +39,15 @@ input {
   -webkit-app-region: no-drag;
 }
 
+:where(button, input, summary):focus {
+  outline: 0;
+}
+
+:where(button, input, summary):focus-visible {
+  outline: 1px solid rgba(242, 184, 75, 0.72);
+  outline-offset: 2px;
+}
+
 .clock-shell {
   width: 100%;
   height: 100%;
@@ -215,12 +224,6 @@ input {
 
 .source-menu[open] .source-select::after {
   transform: rotate(225deg) translate(-2px, -2px);
-}
-
-.source-select:focus-visible {
-  outline: 2px solid rgba(242, 184, 75, 0.72);
-  outline-offset: 2px;
-  border-radius: 4px;
 }
 
 .source-options {

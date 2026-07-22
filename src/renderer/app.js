@@ -97,11 +97,19 @@ function bindEvents() {
   elements.topmostButton.addEventListener("click", toggleWindowTopmost);
   elements.minimizeButton.addEventListener("click", () => window.floatingClock.minimize());
   elements.syncButton.addEventListener("click", syncSelectedSource);
-  elements.sourceMenu.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      elements.sourceMenu.open = false;
-      elements.sourceSelect.focus();
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") {
+      return;
     }
+
+    if (elements.sourceMenu.open) {
+      elements.sourceMenu.open = false;
+      document.activeElement?.blur();
+      return;
+    }
+
+    document.activeElement?.blur();
+    window.floatingClock.minimize();
   });
   document.addEventListener("click", (event) => {
     if (!elements.sourceMenu.contains(event.target)) {
@@ -152,7 +160,7 @@ async function syncSelectedSource() {
 
 async function selectSource(sourceId) {
   elements.sourceMenu.open = false;
-  elements.sourceSelect.focus();
+  document.activeElement?.blur();
 
   if (sourceId === state.sourceId) {
     return;

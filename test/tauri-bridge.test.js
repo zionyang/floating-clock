@@ -35,4 +35,7 @@ test("Tauri bridge reuses the browser time-source pipeline", async () => {
     "pdd-server-time",
     "pdd-server-time",
   ]);
+
+  await window.floatingClock.close();
+  assert.equal(calls.at(-1).command, "quit");
 });
