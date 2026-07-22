@@ -1,3 +1,4 @@
+(function exposeTimeCore() {
 function parseHttpDate(headers) {
   const rawValue = headers.date;
   const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
@@ -67,7 +68,7 @@ function selectBestSample(samples) {
   return [...samples].sort((left, right) => left.roundTripMs - right.roundTripMs)[0];
 }
 
-module.exports = {
+const timeCore = {
   buildSample,
   parseHttpDate,
   parsePinduoduoBody,
@@ -75,3 +76,12 @@ module.exports = {
   parseTaobaoBody,
   selectBestSample,
 };
+
+if (typeof module !== "undefined") {
+  module.exports = timeCore;
+}
+
+if (typeof window !== "undefined") {
+  window.timeCore = timeCore;
+}
+}());

@@ -1,4 +1,3 @@
-const { request } = require("node:https");
 const {
   buildSample,
   parseHttpDate,
@@ -6,7 +5,7 @@ const {
   parsePinduoduoYakTime,
   parseTaobaoBody,
   selectBestSample,
-} = require("./time-core");
+} = typeof module !== "undefined" ? require("./time-core") : window.timeCore;
 
 const SAMPLE_COUNT = 3;
 const REQUEST_TIMEOUT_MS = 3500;
@@ -140,7 +139,7 @@ async function synchronizeSource(sourceId) {
 
 async function collectSample(strategy) {
   const startedAtMs = Date.now();
-  const response = await requestText(strategy.url, strategy.method);
+  const response = await requestText(strategy);
   const finishedAtMs = Date.now();
 
   if (response.statusCode < 200 || response.statusCode >= 400) {
@@ -151,12 +150,17 @@ async function collectSample(strategy) {
   return buildSample(remoteEpochMs, startedAtMs, finishedAtMs, strategy);
 }
 
-function requestText(url, method) {
+function requestText(strategy) {
+  if (typeof window !== "undefined") {
+    return window.floatingClock.requestTime(strategy.id);
+  }
+
+  const { request } = require("node:https");
   return new Promise((resolve, reject) => {
     const clientRequest = request(
-      url,
+      strategy.url,
       {
-        method,
+        method: strategy.method,
         headers: {
           "Cache-Control": "no-cache",
           "User-Agent": "FloatingClock/0.1",
@@ -186,7 +190,15 @@ function requestText(url, method) {
   });
 }
 
-module.exports = {
+const timeSources = {
   getPublicSources,
   synchronizeSource,
 };
+
+if (typeof module !== "undefined") {
+  module.exports = timeSources;
+}
+
+if (typeof window !== "undefined") {
+  window.timeSources = timeSources;
+}

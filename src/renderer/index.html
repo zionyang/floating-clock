@@ -8,8 +8,8 @@
   </head>
   <body>
     <main class="clock-shell">
-      <header class="titlebar">
-        <div class="title">
+      <header class="titlebar" data-tauri-drag-region>
+        <div class="title" data-tauri-drag-region>
           <span class="signal-dot" aria-hidden="true"></span>
           <span>悬浮时钟</span>
         </div>
@@ -63,6 +63,9 @@
       </footer>
     </main>
     <script src="../countdown-core.js"></script>
+    <script src="../time-core.js"></script>
+    <script src="../time-sources.js"></script>
+    <script src="../tauri-bridge.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

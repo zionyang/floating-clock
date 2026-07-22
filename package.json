@@ -4,12 +4,15 @@
   "description": "A floating Windows clock with marketplace time-source switching and countdown mode.",
   "main": "src/main.js",
   "scripts": {
-    "package:win": "electron-packager . FloatingClock --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=src/assets/tray-clock.ico --ignore=^/\\.agents --ignore=^/\\.codex --ignore=^/test",
+    "package:win": "electron-packager . FloatingClock --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=src/assets/tray-clock.ico --ignore=^/\\.agents --ignore=^/\\.codex --ignore=^/src-tauri --ignore=^/test",
     "start": "electron .",
+    "tauri": "tauri",
+    "tauri:build": "tauri build",
     "test": "node --test"
   },
   "devDependencies": {
     "@electron/packager": "^20.0.3",
+    "@tauri-apps/cli": "^2.11.4",
     "electron": "^37.0.0"
   }
 }
