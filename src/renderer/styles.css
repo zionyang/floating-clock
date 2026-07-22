@@ -65,9 +65,20 @@ input {
 }
 
 .titlebar {
+  position: relative;
   justify-content: space-between;
-  min-height: 28px;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 1px solid rgba(242, 184, 75, 0.34);
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(242, 184, 75, 0.14), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 3px 0 0 #f2b84b;
   -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.titlebar:active {
+  cursor: grabbing;
 }
 
 .title,
@@ -79,22 +90,45 @@ input {
 }
 
 .title {
-  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  gap: 10px;
   color: rgba(255, 255, 255, 0.82);
-  font-size: 13px;
-  font-weight: 600;
 }
 
-.signal-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #4cd289;
-  box-shadow: 0 0 0 4px rgba(76, 210, 137, 0.12);
+.drag-grip {
+  width: 16px;
+  height: 24px;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.72) 1.25px, transparent 1.5px);
+  background-size: 6px 6px;
+}
+
+.title-name {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.drag-hint {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .window-actions {
   gap: 4px;
+  padding: 6px;
+  margin: -6px;
+  cursor: default;
+  -webkit-app-region: no-drag;
 }
 
 .window-actions button,
@@ -106,6 +140,17 @@ input {
   background: rgba(255, 255, 255, 0.08);
   color: #f6f4ef;
   cursor: pointer;
+}
+
+.pin-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
 }
 
 .window-actions button:hover,
@@ -139,19 +184,86 @@ input {
   font-size: 12px;
 }
 
-.source-picker select {
+.source-menu {
   min-width: 0;
   flex: 1;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
+  position: relative;
+}
+
+.source-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  list-style: none;
   color: #f6f4ef;
   cursor: pointer;
 }
 
-.source-picker option {
-  color: #111827;
+.source-select::-webkit-details-marker {
+  display: none;
+}
+
+.source-select::after {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: rotate(45deg) translate(-2px, -2px);
+}
+
+.source-menu[open] .source-select::after {
+  transform: rotate(225deg) translate(-2px, -2px);
+}
+
+.source-select:focus-visible {
+  outline: 2px solid rgba(242, 184, 75, 0.72);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.source-options {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: -10px;
+  left: -10px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(242, 184, 75, 0.32);
+  border-radius: 8px;
+  background: #1b2023;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.42);
+}
+
+.source-menu:not([open]) .source-options {
+  display: none;
+}
+
+.source-option {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  text-align: left;
+  cursor: pointer;
+}
+
+.source-option:hover,
+.source-option:focus-visible {
+  outline: 0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.source-option.selected {
+  background: rgba(242, 184, 75, 0.18);
+  color: #ffd986;
+  font-weight: 700;
 }
 
 .icon-button {

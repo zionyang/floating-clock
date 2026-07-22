@@ -8,23 +8,34 @@
   </head>
   <body>
     <main class="clock-shell">
-      <header class="titlebar" data-tauri-drag-region>
-        <div class="title" data-tauri-drag-region>
-          <span class="signal-dot" aria-hidden="true"></span>
-          <span>悬浮时钟</span>
+      <header class="titlebar" data-tauri-drag-region="deep">
+        <div class="title">
+          <span class="drag-grip" aria-hidden="true"></span>
+          <span class="drag-hint">拖动这里移动窗口</span>
+          <span class="title-name">悬浮时钟</span>
         </div>
-        <div class="window-actions">
-          <button id="topmostButton" type="button" title="取消窗口置顶" aria-label="取消窗口置顶">&#9670;</button>
+        <div class="window-actions" data-tauri-drag-region="false">
+          <button id="topmostButton" type="button" title="取消窗口置顶" aria-label="取消窗口置顶">
+            <svg class="pin-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6Z" />
+              <path d="M12 14v7" />
+            </svg>
+          </button>
           <button id="minimizeButton" type="button" title="隐藏到托盘" aria-label="隐藏到托盘">-</button>
           <button id="closeButton" type="button" title="隐藏到托盘" aria-label="隐藏到托盘">&times;</button>
         </div>
       </header>
 
       <section class="source-row">
-        <label class="source-picker">
+        <div class="source-picker">
           <span>时间源</span>
-          <select id="sourceSelect" aria-label="时间源"></select>
-        </label>
+          <details id="sourceMenu" class="source-menu">
+            <summary id="sourceSelect" class="source-select" aria-label="时间源">
+              <span id="sourceSelectValue">加载时间源…</span>
+            </summary>
+            <div id="sourceOptions" class="source-options"></div>
+          </details>
+        </div>
         <button id="syncButton" class="icon-button" type="button" title="重新校准" aria-label="重新校准">
           &#8635;
         </button>

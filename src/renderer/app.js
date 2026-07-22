@@ -10,7 +10,10 @@ const elements = {
   topmostButton: document.querySelector("#topmostButton"),
   minimizeButton: document.querySelector("#minimizeButton"),
   offsetStatus: document.querySelector("#offsetStatus"),
+  sourceMenu: document.querySelector("#sourceMenu"),
+  sourceOptions: document.querySelector("#sourceOptions"),
   sourceSelect: document.querySelector("#sourceSelect"),
+  sourceSelectValue: document.querySelector("#sourceSelectValue"),
   startCountdownButton: document.querySelector("#startCountdownButton"),
   stopCountdownButton: document.querySelector("#stopCountdownButton"),
   syncButton: document.querySelector("#syncButton"),
@@ -38,6 +41,7 @@ const state = {
   offsetSourceId: null,
   topmost: true,
   sourceId: readStoredSourceId(),
+  sources: [],
   syncTimer: null,
 };
 
@@ -64,20 +68,23 @@ async function bootstrap() {
   updateWindowControls(await window.floatingClock.getWindowControls());
   window.floatingClock.onWindowControlsChanged(updateWindowControls);
 
-  const sources = await window.floatingClock.getSources();
-  for (const source of sources) {
-    const option = document.createElement("option");
-    option.value = source.id;
+  state.sources = await window.floatingClock.getSources();
+  for (const source of state.sources) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "source-option";
+    option.dataset.sourceId = source.id;
     option.textContent = source.label;
     option.title = source.description;
-    elements.sourceSelect.append(option);
+    option.addEventListener("click", () => selectSource(source.id));
+    elements.sourceOptions.append(option);
   }
 
-  if (!elements.sourceSelect.querySelector(`option[value="${state.sourceId}"]`)) {
+  if (!state.sources.some(({ id }) => id === state.sourceId)) {
     state.sourceId = "beijing";
   }
 
-  elements.sourceSelect.value = state.sourceId;
+  updateSourceSelect();
   setMode(state.mode);
   await syncSelectedSource();
   render();
@@ -90,10 +97,16 @@ function bindEvents() {
   elements.topmostButton.addEventListener("click", toggleWindowTopmost);
   elements.minimizeButton.addEventListener("click", () => window.floatingClock.minimize());
   elements.syncButton.addEventListener("click", syncSelectedSource);
-  elements.sourceSelect.addEventListener("change", async () => {
-    state.sourceId = elements.sourceSelect.value;
-    localStorage.setItem(STORAGE_KEYS.sourceId, state.sourceId);
-    await syncSelectedSource();
+  elements.sourceMenu.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      elements.sourceMenu.open = false;
+      elements.sourceSelect.focus();
+    }
+  });
+  document.addEventListener("click", (event) => {
+    if (!elements.sourceMenu.contains(event.target)) {
+      elements.sourceMenu.open = false;
+    }
   });
 
   elements.clockModeButton.addEventListener("click", () => setMode("clock"));
@@ -120,7 +133,7 @@ async function syncSelectedSource() {
     elements.offsetStatus.textContent =
       `${syncResult.precisionLabel} · 偏移 ${formatSignedMs(syncResult.offsetMs)}`;
   } catch (error) {
-    elements.syncStatus.textContent = `${elements.sourceSelect.selectedOptions[0]?.textContent || "时间源"}校准失败`;
+    elements.syncStatus.textContent = `${getSelectedSource()?.label || "时间源"}校准失败`;
 
     if (state.hasValidOffset && state.offsetSourceId === state.sourceId) {
       elements.offsetStatus.textContent = `保留偏移 ${formatSignedMs(state.offsetMs)}`;
@@ -135,6 +148,36 @@ async function syncSelectedSource() {
   } finally {
     elements.syncButton.disabled = false;
   }
+}
+
+async function selectSource(sourceId) {
+  elements.sourceMenu.open = false;
+  elements.sourceSelect.focus();
+
+  if (sourceId === state.sourceId) {
+    return;
+  }
+
+  state.sourceId = sourceId;
+  localStorage.setItem(STORAGE_KEYS.sourceId, state.sourceId);
+  updateSourceSelect();
+  await syncSelectedSource();
+}
+
+function getSelectedSource() {
+  return state.sources.find(({ id }) => id === state.sourceId);
+}
+
+function updateSourceSelect() {
+  const selectedSource = getSelectedSource();
+  elements.sourceSelectValue.textContent = selectedSource?.label || "时间源";
+  elements.sourceSelect.title = selectedSource?.description || "";
+
+  elements.sourceOptions.querySelectorAll(".source-option").forEach((option) => {
+    const selected = option.dataset.sourceId === state.sourceId;
+    option.classList.toggle("selected", selected);
+    option.setAttribute("aria-pressed", String(selected));
+  });
 }
 
 function render() {
@@ -215,7 +258,6 @@ function updateWindowControls(controls) {
   state.launchAtLogin = Boolean(controls.launchAtLogin);
   state.topmost = Boolean(controls.topmost);
   elements.topmostButton.classList.toggle("active", state.topmost);
-  elements.topmostButton.textContent = state.topmost ? "◆" : "◇";
   elements.topmostButton.title = state.topmost ? "取消窗口置顶" : "窗口置顶";
   elements.topmostButton.setAttribute("aria-label", elements.topmostButton.title);
 }
