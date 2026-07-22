@@ -1,6 +1,6 @@
 # 悬浮时钟
 
-面向限时抢购任务的 Windows 悬浮时钟，默认使用 Electron，也支持通过 Tauri 构建轻量版本。
+面向限时抢购任务的轻量 Windows 悬浮时钟，采用 Tauri + WebView2。
 
 ## 功能
 
@@ -15,7 +15,7 @@
 - 倒计时支持下一整点、下一个 `10:00` 和下一个 `20:00` 快捷目标。
 - 整点或倒计时目标前最后五秒高亮显示。
 - 支持切换北京时间、京东、拼多多和淘宝时间源。
-- Electron 运行时，时间校准在 Electron 主进程执行；Tauri 构建复用渲染器逻辑，并通过 Rust 网络请求获取时间。
+- 时间校准通过 Rust 原生网络请求执行，不受网页跨域限制。
 - 每个策略最多采样三次，选择往返时间（RTT）最短的样本计算本机偏移。
 - 拼多多和淘宝优先使用毫秒级时间接口，失败后按策略回退到响应头时间。
 
@@ -30,7 +30,7 @@
 
 所有远端策略都失败时，如果当前时间源已有成功校准的偏移，则保留该偏移；否则暂时使用本机时间。HTTP `Date` 响应头只有秒级精度，且可能受到响应缓存和网络延迟影响。`yak-timeinfo` 虽然位于响应头中，但提供毫秒级时间。界面会显示实际使用的策略、精度和偏移。
 
-关闭或最小化窗口时，窗口会隐藏到托盘。需要重新显示时，可以使用 `Ctrl+Alt+T`、托盘图标或托盘菜单；需要退出程序时，使用托盘菜单中的退出选项。
+关闭或最小化窗口时，窗口会隐藏到托盘。需要重新显示时，可以使用 `Ctrl+Alt+T`、托盘图标或托盘菜单；需要退出程序时，使用托盘菜单中的退出选项。若 `Ctrl+Alt+T` 已被其他程序占用，应用仍会正常启动，托盘会标示快捷键不可用，此时可通过托盘图标或菜单操作。
 
 开机启动和鼠标穿透通过托盘菜单控制。开启鼠标穿透后，悬浮层会忽略鼠标输入，关闭托盘菜单中的对应选项后恢复。标题栏菱形按钮控制悬浮层是否保持在其他窗口上方。
 
@@ -38,7 +38,7 @@
 
 ```powershell
 npm install
-npm start
+npm run dev
 ```
 
 ## 测试
@@ -47,7 +47,7 @@ npm start
 npm test
 ```
 
-## 轻量版 Windows 构建
+## Windows 构建
 
 Tauri 构建复用现有渲染器，需要 Rust、Microsoft C++ Build Tools 和 WebView2：
 
@@ -55,8 +55,4 @@ Tauri 构建复用现有渲染器，需要 Rust、Microsoft C++ Build Tools 和 
 npm run tauri:build
 ```
 
-原始可执行文件和 NSIS 安装程序会写入 `src-tauri/target/release`。NSIS 构建使用 Tauri 的 `downloadBootstrapper` 模式，因此没有安装 WebView2 的计算机在安装时需要联网。Electron 构建仍可通过以下命令生成：
-
-```powershell
-npm run package:win
-```
+原始可执行文件和 NSIS 安装程序会写入 `src-tauri/target/release`。NSIS 安装程序使用 Tauri 的 `downloadBootstrapper` 模式：目标电脑缺少 WebView2 时，安装过程需要联网下载运行时。

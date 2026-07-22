@@ -66,9 +66,16 @@ fn show_window(app: &AppHandle) {
     }
 }
 
+fn should_hide_window_for_shortcut(visible: bool, focused: bool) -> bool {
+    visible && focused
+}
+
 fn toggle_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
+        if should_hide_window_for_shortcut(
+            window.is_visible().unwrap_or(false),
+            window.is_focused().unwrap_or(false),
+        ) {
             let _ = window.hide();
         } else {
             show_window(app);
@@ -202,8 +209,19 @@ async fn request_time(strategy_id: String) -> Result<HttpResponse, String> {
     })
 }
 
-fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
-    let show_hide = MenuItem::with_id(app, "toggle", "显示或隐藏", true, Some(SHORTCUT))?;
+fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
+    let toggle_label = if shortcut_available {
+        "显示或隐藏"
+    } else {
+        "显示或隐藏（快捷键不可用）"
+    };
+    let show_hide = MenuItem::with_id(
+        app,
+        "toggle",
+        toggle_label,
+        true,
+        shortcut_available.then_some(SHORTCUT),
+    )?;
     let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let launch_at_login = CheckMenuItem::with_id(
@@ -245,7 +263,11 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                 .expect("application icon is missing")
                 .clone(),
         )
-        .tooltip("悬浮时钟 - Ctrl+Alt+T 显示或隐藏")
+        .tooltip(if shortcut_available {
+            "悬浮时钟 - Ctrl+Alt+T 显示或隐藏"
+        } else {
+            "悬浮时钟 - 全局快捷键不可用"
+        })
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -317,8 +339,14 @@ pub fn run() {
             set_topmost,
         ])
         .setup(|app| {
-            setup_tray(app)?;
-            app.global_shortcut().register(SHORTCUT)?;
+            let shortcut_available = match app.global_shortcut().register(SHORTCUT) {
+                Ok(()) => true,
+                Err(error) => {
+                    eprintln!("Global shortcut {SHORTCUT} is unavailable: {error}");
+                    false
+                }
+            };
+            setup_tray(app, shortcut_available)?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -333,11 +361,18 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::strategy_request;
+    use super::{should_hide_window_for_shortcut, strategy_request};
 
     #[test]
     fn network_command_only_accepts_known_time_strategies() {
         assert!(strategy_request("taobao-timestamp").is_some());
         assert!(strategy_request("https://example.com").is_none());
+    }
+
+    #[test]
+    fn shortcut_only_hides_the_focused_window() {
+        assert!(should_hide_window_for_shortcut(true, true));
+        assert!(!should_hide_window_for_shortcut(true, false));
+        assert!(!should_hide_window_for_shortcut(false, false));
     }
 }
