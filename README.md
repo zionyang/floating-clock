@@ -1,47 +1,62 @@
-# Floating Clock
+# 悬浮时钟
 
-Windows floating clock built with Electron for time-sensitive shopping tasks.
+面向限时抢购任务的 Windows 悬浮时钟，默认使用 Electron，也支持通过 Tauri 构建轻量版本。
 
-## Features
+## 功能
 
-- Frameless always-on-top clock window that can be dragged from the title bar.
-- Fixed-size window with a taskbar entry plus tray recall controls.
-- Single-instance startup that brings back the running overlay instead of duplicating it.
-- Global `Ctrl+Alt+T` show-hide shortcut and tray menu for fast recall.
-- Saved window placement and remembered last selected mode/time source.
-- Tray toggles for launch-at-login and mouse click-through mode.
-- Title-bar topmost toggle for keeping the overlay above other windows only when needed.
-- Switch between real-time clock mode and Beijing-time countdown mode.
-- Countdown quick targets for the next hour and the next upcoming `10:00` or `20:00`.
-- Critical-second highlighting for the last five seconds before each hour or countdown target.
-- Switch time sources between Beijing time, JD, Pinduoduo, and Taobao.
-- Source calibration runs in the Electron main process and uses the best of three samples.
-- Falls back from millisecond marketplace endpoints to response-header time when needed.
+- 无边框、始终置顶的悬浮时钟，可从标题栏拖动。
+- 固定大小窗口，支持任务栏入口和托盘召回。
+- 单实例启动：再次启动时显示已有窗口，不重复创建。
+- 使用全局 `Ctrl+Alt+T` 快捷键和托盘菜单快速显示或隐藏窗口。
+- 保存窗口位置，并记住上次选择的显示模式和时间源。
+- 托盘菜单支持开机启动和鼠标穿透。
+- 标题栏菱形按钮控制窗口是否保持在其他窗口上方。
+- 支持实时时钟和北京时间倒计时两种模式。
+- 倒计时支持下一整点、下一个 `10:00` 和下一个 `20:00` 快捷目标。
+- 整点或倒计时目标前最后五秒高亮显示。
+- 支持切换北京时间、京东、拼多多和淘宝时间源。
+- Electron 运行时，时间校准在 Electron 主进程执行；Tauri 构建复用渲染器逻辑，并通过 Rust 网络请求获取时间。
+- 每个策略最多采样三次，选择往返时间（RTT）最短的样本计算本机偏移。
+- 拼多多和淘宝优先使用毫秒级时间接口，失败后按策略回退到响应头时间。
 
-## Time Sources
+## 时间源
 
-| Source | Primary strategy | Fallback |
+| 时间源 | 主策略 | 远端回退策略 |
 | --- | --- | --- |
-| Beijing time | `www.ntsc.ac.cn` `Date` header | local time after a sync failure |
-| JD | `api.m.jd.com` `Date` header | local time after a sync failure |
-| Pinduoduo | `api.pinduoduo.com/api/server/_stm` | `yak-timeinfo`, then `Date` |
-| Taobao | `h5api.m.taobao.com` timestamp payload | `www.taobao.com` `Date` header |
+| 北京时间 | `https://www.ntsc.ac.cn/` 的 HTTP `Date` 响应头，秒级 | 无其他远端策略 |
+| 京东时间 | `https://api.m.jd.com/` 的 HTTP `Date` 响应头，秒级 | 无其他远端策略 |
+| 拼多多时间 | `https://api.pinduoduo.com/api/server/_stm` 返回的 JSON `server_time`，毫秒级 | `https://www.pinduoduo.com/` 的 `yak-timeinfo`，毫秒级；再回退到 `Date`，秒级 |
+| 淘宝时间 | `https://h5api.m.taobao.com/h5/mtop.common.gettimestamp/1.0/` 返回的 JSON `data.t`，毫秒级 | `https://www.taobao.com/` 的 HTTP `Date` 响应头，秒级 |
 
-Header-based sources are only second-resolution and can be affected by response caching or network delay. The UI shows which strategy and precision were actually used.
+所有远端策略都失败时，如果当前时间源已有成功校准的偏移，则保留该偏移；否则暂时使用本机时间。HTTP `Date` 响应头只有秒级精度，且可能受到响应缓存和网络延迟影响。`yak-timeinfo` 虽然位于响应头中，但提供毫秒级时间。界面会显示实际使用的策略、精度和偏移。
 
-Closing or minimizing the window hides it to the tray. Use `Ctrl+Alt+T`, the tray icon, or the tray menu to bring it back. Exit from the tray menu when you want the app to stop running.
+关闭或最小化窗口时，窗口会隐藏到托盘。需要重新显示时，可以使用 `Ctrl+Alt+T`、托盘图标或托盘菜单；需要退出程序时，使用托盘菜单中的退出选项。
 
-Launch-at-login and mouse click-through are tray-menu controls. Click-through makes the overlay ignore mouse input until you toggle that tray item off again. The title-bar diamond toggles whether the overlay stays above other windows.
+开机启动和鼠标穿透通过托盘菜单控制。开启鼠标穿透后，悬浮层会忽略鼠标输入，关闭托盘菜单中的对应选项后恢复。标题栏菱形按钮控制悬浮层是否保持在其他窗口上方。
 
-## Run
+## 运行
 
 ```powershell
 npm install
 npm start
 ```
 
-## Test
+## 测试
 
 ```powershell
 npm test
+```
+
+## 轻量版 Windows 构建
+
+Tauri 构建复用现有渲染器，需要 Rust、Microsoft C++ Build Tools 和 WebView2：
+
+```powershell
+npm run tauri:build
+```
+
+原始可执行文件和 NSIS 安装程序会写入 `src-tauri/target/release`。NSIS 构建使用 Tauri 的 `downloadBootstrapper` 模式，因此没有安装 WebView2 的计算机在安装时需要联网。Electron 构建仍可通过以下命令生成：
+
+```powershell
+npm run package:win
 ```
