@@ -54,10 +54,10 @@ npm test
 
 ## Windows 构建
 
-Tauri 构建复用现有渲染器，需要 Rust、Microsoft C++ Build Tools 和 WebView2：
+唯一的正式打包入口、版本规则、产物目录和验收步骤见 [打包流程](docs/打包流程.md)。Tauri 构建需要 Rust、Microsoft C++ Build Tools 和 WebView2：
 
 ```powershell
 npm run tauri:build
 ```
 
-原始可执行文件和 NSIS 安装程序会写入 `src-tauri/target/release`。NSIS 安装程序使用 Tauri 的 `downloadBootstrapper` 模式：目标电脑缺少 WebView2 时，安装过程需要联网下载运行时。
+正式分发文件会写入 `dist/`；`src-tauri/target/release` 及其 `bundle/` 子目录是 Tauri 的内部构建产物。NSIS 安装程序使用 Tauri 的 `downloadBootstrapper` 模式：目标电脑缺少 WebView2 时，安装过程需要联网下载运行时。

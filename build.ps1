@@ -1,7 +1,13 @@
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $version = (Get-Content -LiteralPath (Join-Path $root "package.json") -Raw | ConvertFrom-Json).version
+$tauriVersion = (Get-Content -LiteralPath (Join-Path $root "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json).version
+$cargoVersion = (Select-String -LiteralPath (Join-Path $root "src-tauri\Cargo.toml") -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
 $appName = "FloatingClock"
+
+if ($version -ne $tauriVersion -or $version -ne $cargoVersion) {
+    throw "Version mismatch: package.json=$version, tauri.conf.json=$tauriVersion, Cargo.toml=$cargoVersion"
+}
 
 Write-Host "Building with Tauri..." -ForegroundColor Cyan
 Push-Location $root
