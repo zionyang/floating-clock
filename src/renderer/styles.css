@@ -1,0 +1,342 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  letter-spacing: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: transparent;
+  color: #f6f4ef;
+  user-select: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+button,
+select,
+input {
+  -webkit-app-region: no-drag;
+}
+
+.clock-shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(31, 36, 39, 0.96), rgba(12, 15, 18, 0.96)),
+    rgba(18, 22, 25, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.titlebar,
+.source-row,
+.target-row,
+.countdown-actions,
+.statusbar {
+  display: flex;
+  align-items: center;
+}
+
+.titlebar {
+  justify-content: space-between;
+  min-height: 28px;
+  -webkit-app-region: drag;
+}
+
+.title,
+.window-actions,
+.source-picker,
+.mode-switch {
+  display: flex;
+  align-items: center;
+}
+
+.title {
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.signal-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #4cd289;
+  box-shadow: 0 0 0 4px rgba(76, 210, 137, 0.12);
+}
+
+.window-actions {
+  gap: 4px;
+}
+
+.window-actions button,
+.icon-button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6f4ef;
+  cursor: pointer;
+}
+
+.window-actions button:hover,
+.icon-button:hover,
+.mode-switch button:hover,
+.quick-targets button:hover,
+.countdown-actions button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.window-actions button.active {
+  border: 1px solid rgba(242, 184, 75, 0.48);
+  background: rgba(242, 184, 75, 0.18);
+  color: #ffd986;
+}
+
+.source-row {
+  gap: 8px;
+}
+
+.source-picker {
+  min-width: 0;
+  flex: 1;
+  gap: 10px;
+  padding: 0 10px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+}
+
+.source-picker select {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f6f4ef;
+  cursor: pointer;
+}
+
+.source-picker option {
+  color: #111827;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 18px;
+}
+
+.mode-switch {
+  width: 100%;
+  padding: 3px;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mode-switch button {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  background: #f2b84b;
+  color: #16130c;
+  font-weight: 700;
+}
+
+.time-panel {
+  min-height: 118px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 8px 2px;
+}
+
+.time-value,
+.time-subvalue,
+.statusbar p {
+  margin: 0;
+}
+
+.time-value {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 700;
+  text-align: center;
+  transition:
+    color 140ms ease,
+    text-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.time-value.critical {
+  color: #ff6f61;
+  text-shadow:
+    0 0 14px rgba(255, 111, 97, 0.38),
+    0 0 32px rgba(242, 184, 75, 0.24);
+  animation: critical-pulse 900ms ease-in-out infinite;
+}
+
+.time-subvalue {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 13px;
+  text-align: center;
+}
+
+.countdown-panel {
+  min-height: 0;
+  align-content: start;
+  gap: 6px;
+  padding-bottom: 0;
+}
+
+.countdown-value {
+  padding-top: 0;
+  font-size: 38px;
+}
+
+.target-row {
+  min-width: 0;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 12px;
+}
+
+.target-row input {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6f4ef;
+}
+
+.countdown-actions {
+  gap: 8px;
+}
+
+.quick-targets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.quick-targets button {
+  min-width: 0;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.countdown-actions button {
+  height: 32px;
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6f4ef;
+  cursor: pointer;
+}
+
+.countdown-actions button:first-child {
+  border-color: rgba(76, 210, 137, 0.4);
+  background: rgba(76, 210, 137, 0.16);
+}
+
+.statusbar {
+  display: grid;
+  align-items: start;
+  gap: 2px;
+  min-height: 38px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 11px;
+}
+
+.statusbar p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusbar p:last-child {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+@keyframes critical-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.012);
+  }
+}
+
+@media (max-width: 360px) {
+  .time-value {
+    font-size: 40px;
+  }
+
+  .countdown-value {
+    font-size: 32px;
+  }
+
+  .statusbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

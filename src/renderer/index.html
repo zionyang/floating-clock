@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>悬浮时钟</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="clock-shell">
+      <header class="titlebar">
+        <div class="title">
+          <span class="signal-dot" aria-hidden="true"></span>
+          <span>悬浮时钟</span>
+        </div>
+        <div class="window-actions">
+          <button id="topmostButton" type="button" title="取消窗口置顶" aria-label="取消窗口置顶">&#9670;</button>
+          <button id="minimizeButton" type="button" title="隐藏到托盘" aria-label="隐藏到托盘">-</button>
+          <button id="closeButton" type="button" title="隐藏到托盘" aria-label="隐藏到托盘">&times;</button>
+        </div>
+      </header>
+
+      <section class="source-row">
+        <label class="source-picker">
+          <span>时间源</span>
+          <select id="sourceSelect" aria-label="时间源"></select>
+        </label>
+        <button id="syncButton" class="icon-button" type="button" title="重新校准" aria-label="重新校准">
+          &#8635;
+        </button>
+      </section>
+
+      <section class="mode-switch" role="tablist" aria-label="显示模式">
+        <button id="clockModeButton" class="active" type="button" role="tab" aria-selected="true">时钟</button>
+        <button id="countdownModeButton" type="button" role="tab" aria-selected="false">倒计时</button>
+      </section>
+
+      <section id="clockPanel" class="time-panel">
+        <p class="time-value" id="clockValue">--:--:--</p>
+        <p class="time-subvalue" id="dateValue">等待校准</p>
+      </section>
+
+      <section id="countdownPanel" class="time-panel countdown-panel" hidden>
+        <p class="time-value countdown-value" id="countdownValue">00:00:00.000</p>
+        <label class="target-row">
+          <span>目标北京时间</span>
+          <input id="targetInput" type="datetime-local" step="0.001" />
+        </label>
+        <div class="quick-targets" aria-label="快捷倒计时目标">
+          <button type="button" data-quick-target="next-hour">下一整点</button>
+          <button type="button" data-quick-target="10:00">10:00</button>
+          <button type="button" data-quick-target="20:00">20:00</button>
+        </div>
+        <div class="countdown-actions">
+          <button id="startCountdownButton" type="button">开始</button>
+          <button id="stopCountdownButton" type="button">停止</button>
+        </div>
+      </section>
+
+      <footer class="statusbar">
+        <p id="syncStatus">准备校准</p>
+        <p id="offsetStatus">本机偏移 --</p>
+      </footer>
+    </main>
+    <script src="../countdown-core.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
