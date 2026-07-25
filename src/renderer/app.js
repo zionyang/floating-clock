@@ -1,14 +1,25 @@
 const elements = {
+  clockShell: document.querySelector("#clockShell"),
   clockModeButton: document.querySelector("#clockModeButton"),
   clockPanel: document.querySelector("#clockPanel"),
+  clockPrecisionTooltip: document.querySelector("#clockPrecisionTooltip"),
   clockValue: document.querySelector("#clockValue"),
   closeButton: document.querySelector("#closeButton"),
   countdownModeButton: document.querySelector("#countdownModeButton"),
   countdownPanel: document.querySelector("#countdownPanel"),
+  countdownPrecisionTooltip: document.querySelector("#countdownPrecisionTooltip"),
   countdownValue: document.querySelector("#countdownValue"),
   dateValue: document.querySelector("#dateValue"),
   topmostButton: document.querySelector("#topmostButton"),
   minimizeButton: document.querySelector("#minimizeButton"),
+  miniCloseButton: document.querySelector("#miniCloseButton"),
+  miniDate: document.querySelector("#miniDate"),
+  miniMinimizeButton: document.querySelector("#miniMinimizeButton"),
+  miniModeButton: document.querySelector("#miniModeButton"),
+  miniPanel: document.querySelector(".mini-panel"),
+  miniRestoreButton: document.querySelector("#miniRestoreButton"),
+  miniSource: document.querySelector("#miniSource"),
+  miniValue: document.querySelector("#miniValue"),
   offsetStatus: document.querySelector("#offsetStatus"),
   sourceMenu: document.querySelector("#sourceMenu"),
   sourceOptions: document.querySelector("#sourceOptions"),
@@ -19,6 +30,7 @@ const elements = {
   syncButton: document.querySelector("#syncButton"),
   syncStatus: document.querySelector("#syncStatus"),
   targetInput: document.querySelector("#targetInput"),
+  titlebar: document.querySelector(".titlebar"),
   quickTargetButtons: document.querySelectorAll("[data-quick-target]"),
 };
 const {
@@ -28,6 +40,8 @@ const {
 } = window.countdownCore;
 
 const CRITICAL_WINDOW_MS = 5000;
+const MINI_WINDOW_MIN_WIDTH = 236;
+const STANDARD_WINDOW_WIDTH = 392;
 const STORAGE_KEYS = {
   mode: "floatingClock.mode",
   sourceId: "floatingClock.sourceId",
@@ -39,7 +53,12 @@ const state = {
   mode: readStoredMode(),
   offsetMs: 0,
   offsetSourceId: null,
+  presentation: "standard",
+  showMilliseconds: true,
   topmost: true,
+  miniResizeFrame: null,
+  miniValueLength: null,
+  miniWidth: MINI_WINDOW_MIN_WIDTH,
   sourceId: readStoredSourceId(),
   sources: [],
   syncTimer: null,
@@ -64,9 +83,15 @@ bootstrap();
 
 async function bootstrap() {
   bindEvents();
+  updateTimePrecisionTooltips();
   setDefaultCountdownTarget();
-  updateWindowControls(await window.floatingClock.getWindowControls());
+  const controls = await window.floatingClock.getWindowControls();
+  updateWindowControls(controls);
+  applyPresentation(Boolean(controls.mini));
   window.floatingClock.onWindowControlsChanged(updateWindowControls);
+  window.floatingClock.onWindowPresentationChanged((presentation) => {
+    applyPresentation(Boolean(presentation.mini));
+  });
 
   state.sources = await window.floatingClock.getSources();
   for (const source of state.sources) {
@@ -96,13 +121,42 @@ function bindEvents() {
   elements.closeButton.addEventListener("click", () => window.floatingClock.close());
   elements.topmostButton.addEventListener("click", toggleWindowTopmost);
   elements.minimizeButton.addEventListener("click", () => window.floatingClock.minimize());
+  elements.clockValue.addEventListener("click", toggleTimePrecision);
+  elements.countdownValue.addEventListener("click", toggleTimePrecision);
+  elements.titlebar.addEventListener("mousedown", (event) => {
+    if (
+      event.button !== 0
+      || event.detail !== 2
+      || event.target.closest("button, input, select, summary")
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setWindowPresentation(true);
+  }, true);
+  elements.miniModeButton.addEventListener("click", () => setWindowPresentation(true));
+  elements.miniRestoreButton.addEventListener("click", () => setWindowPresentation(false));
+  elements.miniCloseButton.addEventListener("click", () => window.floatingClock.close());
+  elements.miniMinimizeButton.addEventListener("click", () => window.floatingClock.minimize());
+  elements.miniPanel.addEventListener("mousedown", (event) => {
+    if (state.presentation !== "mini" || event.button !== 0 || event.detail !== 2) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setWindowPresentation(false);
+  }, true);
+  elements.miniPanel.addEventListener("dblclick", () => setWindowPresentation(false));
   elements.syncButton.addEventListener("click", syncSelectedSource);
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
       return;
     }
 
-    if (elements.sourceMenu.open) {
+    if (state.presentation === "standard" && elements.sourceMenu.open) {
       elements.sourceMenu.open = false;
       document.activeElement?.blur();
       return;
@@ -182,6 +236,7 @@ function updateSourceSelect() {
   const selectedSource = getSelectedSource();
   elements.sourceSelectValue.textContent = selectedSource?.label || "时间源";
   elements.sourceSelect.title = selectedSource?.description || "";
+  elements.miniSource.textContent = selectedSource?.label || "时间源";
 
   elements.sourceOptions.querySelectorAll(".source-option").forEach((option) => {
     const selected = option.dataset.sourceId === state.sourceId;
@@ -193,29 +248,39 @@ function updateSourceSelect() {
 function render() {
   const sourceNow = Date.now() + state.offsetMs;
   const clockParts = getBeijingTimeParts(sourceNow);
+  const clockText = formatTimePrecision(
+    `${clockParts.hour}:${clockParts.minute}:${clockParts.second}.${clockParts.millisecond}`,
+  );
+  const clockCritical = isClockCritical(sourceNow);
   updateTargetInputMinimum(sourceNow);
 
-  elements.clockValue.textContent =
-    `${clockParts.hour}:${clockParts.minute}:${clockParts.second}.${clockParts.millisecond}`;
-  elements.dateValue.textContent = dateFormatter.format(sourceNow);
-  setCriticalState(elements.clockValue, isClockCritical(sourceNow));
+  elements.clockValue.textContent = clockText;
+  const displayDate = formatDisplayDate(sourceNow);
+  elements.dateValue.textContent = displayDate;
+  elements.miniDate.textContent = displayDate;
+  setCriticalState(elements.clockValue, clockCritical);
 
+  let countdownText = "00:00:00.000";
+  let countdownCritical = false;
   if (state.countdownTargetEpochMs === null) {
-    elements.countdownValue.textContent = "00:00:00.000";
-    setCriticalState(elements.countdownValue, false);
-    return;
+  } else {
+    const remainingMs = state.countdownTargetEpochMs - sourceNow;
+    if (remainingMs <= 0) {
+      stopCountdown();
+    } else {
+      countdownText = formatCountdown(remainingMs);
+      countdownCritical = remainingMs <= CRITICAL_WINDOW_MS;
+    }
   }
 
-  const remainingMs = state.countdownTargetEpochMs - sourceNow;
-  if (remainingMs <= 0) {
-    stopCountdown();
-    elements.countdownValue.textContent = "00:00:00.000";
-    setCriticalState(elements.countdownValue, false);
-    return;
-  }
+  countdownText = formatTimePrecision(countdownText);
+  elements.countdownValue.textContent = countdownText;
 
-  elements.countdownValue.textContent = formatCountdown(remainingMs);
-  setCriticalState(elements.countdownValue, remainingMs <= CRITICAL_WINDOW_MS);
+  setCriticalState(elements.countdownValue, countdownCritical);
+  updateMiniValue(
+    state.mode === "clock" ? clockText : countdownText,
+    state.mode === "clock" ? clockCritical : countdownCritical,
+  );
 }
 
 function setMode(mode) {
@@ -229,6 +294,27 @@ function setMode(mode) {
   elements.countdownModeButton.classList.toggle("active", !clockMode);
   elements.clockModeButton.setAttribute("aria-selected", String(clockMode));
   elements.countdownModeButton.setAttribute("aria-selected", String(!clockMode));
+  render();
+}
+
+function toggleTimePrecision() {
+  state.showMilliseconds = !state.showMilliseconds;
+  updateTimePrecisionTooltips();
+  render();
+}
+
+function updateTimePrecisionTooltips() {
+  const label = state.showMilliseconds
+    ? "显示整秒"
+    : "显示毫秒";
+
+  [
+    [elements.clockValue, elements.clockPrecisionTooltip],
+    [elements.countdownValue, elements.countdownPrecisionTooltip],
+  ].forEach(([value, tooltip]) => {
+    value.setAttribute("aria-label", label);
+    tooltip.textContent = label;
+  });
 }
 
 function setDefaultCountdownTarget() {
@@ -262,6 +348,58 @@ function stopCountdown() {
 
 async function toggleWindowTopmost() {
   updateWindowControls(await window.floatingClock.setTopmost(!state.topmost));
+}
+
+async function setWindowPresentation(mini) {
+  const presentation = await window.floatingClock.setWindowPresentation(
+    mini,
+    mini ? state.miniWidth : STANDARD_WINDOW_WIDTH,
+  );
+  applyPresentation(Boolean(presentation.mini));
+}
+
+function applyPresentation(mini) {
+  state.presentation = mini ? "mini" : "standard";
+  elements.clockShell.setAttribute("data-tauri-drag-region", mini ? "deep" : "false");
+  elements.clockShell.classList.toggle("mini", mini);
+  if (mini) {
+    scheduleMiniResize(true);
+  } else {
+    state.miniValueLength = null;
+  }
+}
+
+function updateMiniValue(value, critical) {
+  elements.miniValue.textContent = value;
+  setCriticalState(elements.miniValue, critical);
+
+  const valueLengthChanged = state.miniValueLength !== value.length;
+  state.miniValueLength = value.length;
+  if (state.presentation === "mini" && valueLengthChanged) {
+    scheduleMiniResize();
+  }
+}
+
+function scheduleMiniResize(force = false) {
+  if (state.presentation !== "mini" || state.miniResizeFrame !== null) {
+    return;
+  }
+
+  state.miniResizeFrame = window.requestAnimationFrame(async () => {
+    state.miniResizeFrame = null;
+    const measuredWidth = Math.ceil(elements.miniValue.getBoundingClientRect().width + 40);
+    const nextWidth = Math.max(MINI_WINDOW_MIN_WIDTH, measuredWidth);
+    if (!force && nextWidth === state.miniWidth) {
+      return;
+    }
+
+    state.miniWidth = nextWidth;
+    try {
+      await window.floatingClock.setWindowPresentation(true, nextWidth);
+    } catch (error) {
+      console.error(error);
+    }
+  });
 }
 
 function updateWindowControls(controls) {
@@ -352,6 +490,22 @@ function updateTargetInputMinimum(epochMs = getSourceNow()) {
 
 function getSourceNow() {
   return Date.now() + state.offsetMs;
+}
+
+function formatTimePrecision(value) {
+  return state.showMilliseconds ? value : value.replace(/\.\d{3}$/, "");
+}
+
+function formatDisplayDate(timestamp) {
+  const parts = dateFormatter.formatToParts(timestamp);
+  const weekday = parts.find(({ type }) => type === "weekday")?.value || "";
+  const date = parts
+    .filter(({ type }) => type !== "weekday")
+    .map(({ value }) => value)
+    .join("")
+    .trim();
+
+  return weekday ? `${date} ${weekday}` : date;
 }
 
 function formatCountdown(remainingMs) {

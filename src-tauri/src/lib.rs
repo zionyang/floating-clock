@@ -12,7 +12,7 @@ use serde::Serialize;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter, LogicalSize, Manager,
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -22,18 +22,25 @@ const SHORTCUT: &str = "Ctrl+Alt+T";
 const NTP_SERVER: &str = "ntp.ntsc.ac.cn:123";
 const NTP_PACKET_LENGTH: usize = 48;
 const NTP_UNIX_EPOCH_SECONDS: u64 = 2_208_988_800;
+const STANDARD_WINDOW_WIDTH: f64 = 392.0;
+const STANDARD_WINDOW_HEIGHT: f64 = 392.0;
+const MINI_WINDOW_MIN_WIDTH: f64 = 236.0;
+const MINI_WINDOW_MAX_WIDTH: f64 = 1200.0;
+const MINI_WINDOW_HEIGHT: f64 = 92.0;
 
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 #[derive(Default)]
 struct ControlsState {
-    topmost: AtomicBool,
+    standard_topmost: AtomicBool,
     click_through: AtomicBool,
+    mini: AtomicBool,
 }
 
 struct ControlsMenu {
     launch_at_login: CheckMenuItem<tauri::Wry>,
     topmost: CheckMenuItem<tauri::Wry>,
+    mini: CheckMenuItem<tauri::Wry>,
     click_through: CheckMenuItem<tauri::Wry>,
 }
 
@@ -43,6 +50,13 @@ struct WindowControls {
     launch_at_login: bool,
     topmost: bool,
     click_through: bool,
+    mini: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WindowPresentation {
+    mini: bool,
 }
 
 #[derive(Serialize)]
@@ -107,14 +121,32 @@ fn toggle_window(app: &AppHandle) {
 
 fn window_controls(app: &AppHandle) -> Result<WindowControls, String> {
     let state = app.state::<ControlsState>();
+    let mini = state.mini.load(Ordering::Relaxed);
     Ok(WindowControls {
         launch_at_login: app
             .autolaunch()
             .is_enabled()
             .map_err(|error| error.to_string())?,
-        topmost: state.topmost.load(Ordering::Relaxed),
+        topmost: effective_topmost(state.standard_topmost.load(Ordering::Relaxed), mini),
         click_through: state.click_through.load(Ordering::Relaxed),
+        mini,
     })
+}
+
+fn effective_topmost(standard_topmost: bool, mini: bool) -> bool {
+    mini || standard_topmost
+}
+
+fn topmost_change_allowed(mini: bool) -> bool {
+    !mini
+}
+
+fn normalize_mini_width(width: f64) -> f64 {
+    if width.is_finite() {
+        width.clamp(MINI_WINDOW_MIN_WIDTH, MINI_WINDOW_MAX_WIDTH)
+    } else {
+        MINI_WINDOW_MIN_WIDTH
+    }
 }
 
 fn emit_controls(app: &AppHandle) -> Result<WindowControls, String> {
@@ -125,20 +157,75 @@ fn emit_controls(app: &AppHandle) -> Result<WindowControls, String> {
 }
 
 fn apply_topmost(app: &AppHandle, enabled: bool) -> Result<WindowControls, String> {
+    let state = app.state::<ControlsState>();
+    if !topmost_change_allowed(state.mini.load(Ordering::Relaxed)) {
+        return Err("Mini 模式固定置顶，不能取消".to_owned());
+    }
+
     let window = app
         .get_webview_window("main")
         .ok_or("main window is unavailable")?;
     window
         .set_always_on_top(enabled)
         .map_err(|error| error.to_string())?;
-    app.state::<ControlsState>()
-        .topmost
+    state
+        .standard_topmost
         .store(enabled, Ordering::Relaxed);
     app.state::<ControlsMenu>()
         .topmost
         .set_checked(enabled)
         .map_err(|error| error.to_string())?;
     emit_controls(app)
+}
+
+fn apply_presentation(
+    app: &AppHandle,
+    mini: bool,
+    requested_width: f64,
+) -> Result<WindowPresentation, String> {
+    let state = app.state::<ControlsState>();
+    let previous_mini = state.mini.load(Ordering::Relaxed);
+    let effective_topmost = effective_topmost(state.standard_topmost.load(Ordering::Relaxed), mini);
+    let width = if mini {
+        normalize_mini_width(requested_width)
+    } else {
+        STANDARD_WINDOW_WIDTH
+    };
+    let height = if mini {
+        MINI_WINDOW_HEIGHT
+    } else {
+        STANDARD_WINDOW_HEIGHT
+    };
+    let window = app
+        .get_webview_window("main")
+        .ok_or("main window is unavailable")?;
+
+    window
+        .set_always_on_top(effective_topmost)
+        .map_err(|error| error.to_string())?;
+    window
+        .set_size(LogicalSize::new(width, height))
+        .map_err(|error| error.to_string())?;
+
+    state.mini.store(mini, Ordering::Relaxed);
+    let menu = app.state::<ControlsMenu>();
+    menu.mini
+        .set_checked(mini)
+        .map_err(|error| error.to_string())?;
+    menu.topmost
+        .set_checked(effective_topmost)
+        .map_err(|error| error.to_string())?;
+    menu.topmost
+        .set_enabled(!mini)
+        .map_err(|error| error.to_string())?;
+
+    let presentation = WindowPresentation { mini };
+    if previous_mini != mini {
+        app.emit("window-presentation-changed", presentation.clone())
+            .map_err(|error| error.to_string())?;
+    }
+    emit_controls(app)?;
+    Ok(presentation)
 }
 
 fn apply_click_through(app: &AppHandle, enabled: bool) -> Result<WindowControls, String> {
@@ -182,6 +269,15 @@ fn set_launch_at_login(app: AppHandle, enabled: bool) -> Result<WindowControls, 
 #[tauri::command]
 fn set_topmost(app: AppHandle, enabled: bool) -> Result<WindowControls, String> {
     apply_topmost(&app, enabled)
+}
+
+#[tauri::command]
+fn set_window_presentation(
+    app: AppHandle,
+    mini: bool,
+    width: f64,
+) -> Result<WindowPresentation, String> {
+    apply_presentation(&app, mini, width)
 }
 
 #[tauri::command]
@@ -390,6 +486,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let topmost = CheckMenuItem::with_id(app, "topmost", "窗口置顶", true, true, None::<&str>)?;
+    let mini = CheckMenuItem::with_id(app, "mini-mode", "Mini 模式", true, false, None::<&str>)?;
     let click_through =
         CheckMenuItem::with_id(app, "click-through", "鼠标穿透", true, false, None::<&str>)?;
     let separator_two = PredefinedMenuItem::separator(app)?;
@@ -402,6 +499,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
             &separator,
             &launch_at_login,
             &topmost,
+            &mini,
             &click_through,
             &separator_two,
             &quit,
@@ -411,6 +509,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
     app.manage(ControlsMenu {
         launch_at_login,
         topmost,
+        mini,
         click_through,
     });
 
@@ -435,8 +534,15 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
                 let _ = set_launch_at_login(app.clone(), enabled);
             }
             "topmost" => {
-                let enabled = !app.state::<ControlsState>().topmost.load(Ordering::Relaxed);
+                let enabled = !app
+                    .state::<ControlsState>()
+                    .standard_topmost
+                    .load(Ordering::Relaxed);
                 let _ = apply_topmost(app, enabled);
+            }
+            "mini-mode" => {
+                let enabled = !app.state::<ControlsState>().mini.load(Ordering::Relaxed);
+                let _ = apply_presentation(app, enabled, MINI_WINDOW_MIN_WIDTH);
             }
             "click-through" => {
                 let enabled = !app
@@ -499,8 +605,9 @@ pub fn run() {
                 .build(),
         )
         .manage(ControlsState {
-            topmost: AtomicBool::new(true),
+            standard_topmost: AtomicBool::new(true),
             click_through: AtomicBool::new(false),
+            mini: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
             get_window_controls,
@@ -510,6 +617,7 @@ pub fn run() {
             request_time,
             set_launch_at_login,
             set_topmost,
+            set_window_presentation,
         ])
         .setup(|app| {
             let shortcut_available = match app.global_shortcut().register(SHORTCUT) {
@@ -529,7 +637,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        ntp_request_timestamp, ntp_timestamp, should_hide_window_for_shortcut, strategy_request,
+        effective_topmost, normalize_mini_width, ntp_request_timestamp, ntp_timestamp,
+        should_hide_window_for_shortcut, strategy_request, topmost_change_allowed,
+        MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH,
     };
 
     #[test]
@@ -552,5 +662,27 @@ mod tests {
         assert!(should_hide_window_for_shortcut(true, true));
         assert!(!should_hide_window_for_shortcut(true, false));
         assert!(!should_hide_window_for_shortcut(false, false));
+    }
+
+    #[test]
+    fn mini_mode_forces_topmost_without_losing_standard_preference() {
+        assert!(!effective_topmost(false, false));
+        assert!(effective_topmost(true, false));
+        assert!(effective_topmost(false, true));
+        assert!(effective_topmost(true, true));
+    }
+
+    #[test]
+    fn mini_mode_rejects_topmost_changes() {
+        assert!(topmost_change_allowed(false));
+        assert!(!topmost_change_allowed(true));
+    }
+
+    #[test]
+    fn mini_width_is_finite_and_bounded() {
+        assert_eq!(normalize_mini_width(f64::NAN), MINI_WINDOW_MIN_WIDTH);
+        assert_eq!(normalize_mini_width(1.0), MINI_WINDOW_MIN_WIDTH);
+        assert_eq!(normalize_mini_width(320.0), 320.0);
+        assert_eq!(normalize_mini_width(10_000.0), MINI_WINDOW_MAX_WIDTH);
     }
 }

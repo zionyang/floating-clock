@@ -16,8 +16,13 @@
     getWindowControls: () => invoke("get_window_controls"),
     setLaunchAtLogin: (enabled) => invoke("set_launch_at_login", { enabled }),
     setTopmost: (enabled) => invoke("set_topmost", { enabled }),
+    setWindowPresentation: (mini, width) => invoke("set_window_presentation", { mini, width }),
     onWindowControlsChanged: (callback) => {
       const unlisten = listen("window-controls-changed", ({ payload }) => callback(payload));
+      return async () => (await unlisten)();
+    },
+    onWindowPresentationChanged: (callback) => {
+      const unlisten = listen("window-presentation-changed", ({ payload }) => callback(payload));
       return async () => (await unlisten)();
     },
   };

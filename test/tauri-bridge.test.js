@@ -67,6 +67,46 @@ test("Tauri bridge exposes the fixed NTP command for Beijing time", async () => 
   assert.deepEqual(calls, ["request_ntp_time", "request_ntp_time", "request_ntp_time"]);
 });
 
+test("Tauri bridge exposes Mini presentation changes", async () => {
+  const calls = [];
+  const listeners = new Map();
+  const window = {
+    __TAURI__: {
+      core: {
+        invoke: async (command, arguments) => {
+          calls.push({ command, arguments });
+          if (command === "set_window_presentation") {
+            return { mini: arguments.mini };
+          }
+          throw new Error(`Unexpected command: ${command}`);
+        },
+      },
+      event: {
+        listen: async (eventName, callback) => {
+          listeners.set(eventName, callback);
+          return () => listeners.delete(eventName);
+        },
+      },
+    },
+  };
+  const context = vm.createContext({ Promise, window });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "src", "tauri-bridge.js"), "utf8"), context);
+
+  const result = await window.floatingClock.setWindowPresentation(true, 320);
+  assert.equal(result.mini, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "set_window_presentation");
+  assert.equal(calls[0].arguments.mini, true);
+  assert.equal(calls[0].arguments.width, 320);
+
+  let received = null;
+  await window.floatingClock.onWindowPresentationChanged((presentation) => {
+    received = presentation;
+  });
+  listeners.get("window-presentation-changed")({ payload: { mini: false } });
+  assert.equal(received.mini, false);
+});
+
 test("Meituan uses its own Date-boundary calibration strategy", async () => {
   const calls = [];
   const baseDate = Math.floor(Date.now() / 1000) * 1000;
