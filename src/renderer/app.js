@@ -21,6 +21,7 @@ const elements = {
   miniSource: document.querySelector("#miniSource"),
   miniValue: document.querySelector("#miniValue"),
   offsetStatus: document.querySelector("#offsetStatus"),
+  precisionNotice: document.querySelector("#precisionNotice"),
   sourceMenu: document.querySelector("#sourceMenu"),
   sourceOptions: document.querySelector("#sourceOptions"),
   sourceSelect: document.querySelector("#sourceSelect"),
@@ -40,6 +41,7 @@ const {
 } = window.countdownCore;
 
 const CRITICAL_WINDOW_MS = 5000;
+const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
 const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
 const STORAGE_KEYS = {
@@ -54,7 +56,11 @@ const state = {
   offsetMs: 0,
   offsetSourceId: null,
   presentation: "standard",
+  precisionNotice: "",
   showMilliseconds: true,
+  sourcePrecision: "unknown",
+  sourceSupportsMilliseconds: null,
+  timePrecisionUserChosen: false,
   topmost: true,
   miniResizeFrame: null,
   miniValueLength: null,
@@ -83,7 +89,8 @@ bootstrap();
 
 async function bootstrap() {
   bindEvents();
-  updateTimePrecisionTooltips();
+  updateTimePrecisionControls();
+  updatePrecisionNotice();
   setDefaultCountdownTarget();
   const controls = await window.floatingClock.getWindowControls();
   updateWindowControls(controls);
@@ -114,7 +121,7 @@ async function bootstrap() {
   await syncSelectedSource();
   render();
   window.setInterval(render, 16);
-  state.syncTimer = window.setInterval(syncSelectedSource, 60_000);
+  state.syncTimer = window.setInterval(syncSelectedSource, AUTO_SYNC_INTERVAL_MS);
 }
 
 function bindEvents() {
@@ -188,7 +195,15 @@ async function syncSelectedSource() {
     const syncResult = await window.floatingClock.syncSource(state.sourceId);
     state.offsetMs = syncResult.offsetMs;
     state.offsetSourceId = syncResult.sourceId;
+    state.sourcePrecision = syncResult.precision;
+    state.sourceSupportsMilliseconds = syncResult.supportsMilliseconds;
+    if (!state.timePrecisionUserChosen) {
+      state.showMilliseconds = syncResult.precision === "millisecond";
+    }
+    state.precisionNotice = getPrecisionNotice(syncResult);
     state.hasValidOffset = true;
+    updateTimePrecisionControls();
+    updatePrecisionNotice();
     updateTargetInputMinimum();
     const quality = syncResult.calibrationWindowMs === undefined
       ? `RTT ${syncResult.roundTripMs} ms`
@@ -197,16 +212,24 @@ async function syncSelectedSource() {
     elements.offsetStatus.textContent =
       `${syncResult.precisionLabel} · 误差 ±${syncResult.uncertaintyMs} ms · 偏移 ${formatSignedMs(syncResult.offsetMs)}`;
   } catch (error) {
-    elements.syncStatus.textContent = `${getSelectedSource()?.label || "时间源"}校准失败`;
+    const sourceLabel = getSelectedSource()?.label || "时间源";
+    elements.syncStatus.textContent = `${sourceLabel}校准失败`;
 
     if (state.hasValidOffset && state.offsetSourceId === state.sourceId) {
       elements.offsetStatus.textContent = `保留偏移 ${formatSignedMs(state.offsetMs)}`;
+      state.precisionNotice = `${sourceLabel}校准失败，沿用上次校准`;
     } else {
       state.offsetMs = 0;
       state.offsetSourceId = null;
       state.hasValidOffset = false;
+      state.sourcePrecision = "unknown";
+      state.sourceSupportsMilliseconds = null;
       elements.offsetStatus.textContent = "暂用本机时间";
+      state.precisionNotice = `${sourceLabel}校准失败，暂用本机时间`;
     }
+
+    updateTimePrecisionControls();
+    updatePrecisionNotice();
 
     console.error(error);
   } finally {
@@ -223,6 +246,12 @@ async function selectSource(sourceId) {
   }
 
   state.sourceId = sourceId;
+  state.sourcePrecision = "unknown";
+  state.sourceSupportsMilliseconds = null;
+  state.timePrecisionUserChosen = false;
+  state.precisionNotice = "";
+  updateTimePrecisionControls();
+  updatePrecisionNotice();
   localStorage.setItem(STORAGE_KEYS.sourceId, state.sourceId);
   updateSourceSelect();
   await syncSelectedSource();
@@ -298,23 +327,50 @@ function setMode(mode) {
 }
 
 function toggleTimePrecision() {
+  if (!canToggleTimePrecision()) {
+    return;
+  }
+
   state.showMilliseconds = !state.showMilliseconds;
-  updateTimePrecisionTooltips();
+  state.timePrecisionUserChosen = true;
+  updateTimePrecisionControls();
   render();
 }
 
-function updateTimePrecisionTooltips() {
-  const label = state.showMilliseconds
-    ? "显示整秒"
-    : "显示毫秒";
+function updateTimePrecisionControls() {
+  const unavailable = !canToggleTimePrecision();
+  const label = unavailable
+    ? "毫秒显示不可用"
+    : state.showMilliseconds
+      ? "显示整秒"
+      : "显示毫秒";
 
   [
     [elements.clockValue, elements.clockPrecisionTooltip],
     [elements.countdownValue, elements.countdownPrecisionTooltip],
   ].forEach(([value, tooltip]) => {
     value.setAttribute("aria-label", label);
+    value.setAttribute("aria-disabled", String(unavailable));
+    value.classList.toggle("precision-unavailable", unavailable);
+    value.toggleAttribute("aria-describedby", !unavailable);
+    tooltip.hidden = unavailable;
     tooltip.textContent = label;
   });
+}
+
+function getPrecisionNotice(syncResult) {
+  if (syncResult.precision === "millisecond") {
+    return "";
+  }
+
+  return syncResult.supportsMilliseconds
+    ? "毫秒校准失败"
+    : "非平台级严格毫秒";
+}
+
+function updatePrecisionNotice() {
+  elements.precisionNotice.hidden = !state.precisionNotice;
+  elements.precisionNotice.textContent = state.precisionNotice;
 }
 
 function setDefaultCountdownTarget() {
@@ -492,8 +548,12 @@ function getSourceNow() {
   return Date.now() + state.offsetMs;
 }
 
+function canToggleTimePrecision() {
+  return state.hasValidOffset && state.sourcePrecision !== "unknown";
+}
+
 function formatTimePrecision(value) {
-  return state.showMilliseconds ? value : value.replace(/\.\d{3}$/, "");
+  return state.showMilliseconds && canToggleTimePrecision() ? value : value.replace(/\.\d{3}$/, "");
 }
 
 function formatDisplayDate(timestamp) {

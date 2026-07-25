@@ -107,10 +107,16 @@ test("Tauri bridge exposes Mini presentation changes", async () => {
   assert.equal(received.mini, false);
 });
 
-test("Meituan uses its own Date-boundary calibration strategy", async () => {
+test("Meituan keeps its own seconds-level Date calibration when the boundary window exceeds 100 ms", async () => {
   const calls = [];
-  const baseDate = Math.floor(Date.now() / 1000) * 1000;
-  const dates = [baseDate, baseDate + 1000].map((value) => new Date(value).toUTCString());
+  const baseDate = 1_700_000_000_000;
+  const dates = [baseDate + 1000, baseDate + 2000].map((value) => new Date(value).toUTCString());
+  const timestamps = [100, 450, 500, 800];
+  const MockDate = function MockDate(...argumentsList) {
+    return new Date(...argumentsList);
+  };
+  MockDate.now = () => timestamps.shift() || 800;
+  MockDate.parse = Date.parse;
   const window = {
     __TAURI__: {
       core: {
@@ -124,7 +130,7 @@ test("Meituan uses its own Date-boundary calibration strategy", async () => {
   };
   const context = vm.createContext({
     console,
-    Date,
+    Date: MockDate,
     JSON,
     Promise,
     setTimeout: (callback) => callback(),
@@ -137,12 +143,71 @@ test("Meituan uses its own Date-boundary calibration strategy", async () => {
 
   const result = await window.floatingClock.syncSource("meituan");
   assert.equal(result.strategyId, "meituan-phase");
-  assert.ok(result.uncertaintyMs <= 100);
+  assert.equal(result.precision, "second");
+  assert.equal(result.precisionLabel, "秒级");
+  assert.equal(result.uncertaintyMs, 350);
   assert.deepEqual(calls.map(({ command }) => command), ["request_time", "request_time"]);
   assert.deepEqual(calls.map(({ arguments }) => arguments.strategyId), ["meituan-phase", "meituan-phase"]);
 });
 
-test("every listed source returns a millisecond calibration sample", async () => {
+test("a direct millisecond field falls back to seconds display when network uncertainty is too high", async () => {
+  const timestamps = [100, 360, 600, 860, 1100, 1360];
+  const MockDate = function MockDate(...argumentsList) {
+    return new Date(...argumentsList);
+  };
+  MockDate.now = () => timestamps.shift() || 1360;
+  MockDate.parse = Date.parse;
+  const window = {
+    __TAURI__: {
+      core: {
+        invoke: async () => ({
+          body: JSON.stringify({ server_time: 1_700_000_000_000 }),
+          headers: {},
+          statusCode: 200,
+        }),
+      },
+      event: { listen: async () => () => {} },
+    },
+  };
+  const context = vm.createContext({ console, Date: MockDate, JSON, Promise, window });
+
+  for (const file of ["time-core.js", "time-sources.js", "tauri-bridge.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "src", file), "utf8"), context);
+  }
+
+  const result = await window.floatingClock.syncSource("pinduoduo");
+  assert.equal(result.strategyId, "pdd-server-time");
+  assert.equal(result.uncertaintyMs, 130);
+  assert.equal(result.precision, "second");
+  assert.equal(result.precisionLabel, "秒级");
+});
+
+test("Beijing keeps millisecond display after any valid NTP response", async () => {
+  const window = {
+    __TAURI__: {
+      core: {
+        invoke: async (command) => {
+          assert.equal(command, "request_ntp_time");
+          return { checkedAtEpochMs: 1_700_000_000_000, offsetMs: 15, roundTripMs: 500 };
+        },
+      },
+      event: { listen: async () => () => {} },
+    },
+  };
+  const context = vm.createContext({ console, Date, JSON, Promise, window });
+
+  for (const file of ["time-core.js", "time-sources.js", "tauri-bridge.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "src", file), "utf8"), context);
+  }
+
+  const result = await window.floatingClock.syncSource("beijing");
+  assert.equal(result.roundTripMs, 500);
+  assert.equal(result.uncertaintyMs, 250);
+  assert.equal(result.precision, "millisecond");
+  assert.equal(result.precisionLabel, "毫秒级");
+});
+
+test("listed sources report their actual precision and include Damai", async () => {
   const baseDate = Math.floor(Date.now() / 1000) * 1000;
   const phaseCalls = new Map();
   const window = {
@@ -188,12 +253,23 @@ test("every listed source returns a millisecond calibration sample", async () =>
 
   assert.deepEqual(
     Array.from((await window.floatingClock.getSources()).map(({ id }) => id)),
-    ["beijing", "jd", "pinduoduo", "taobao", "meituan", "meituan-flash", "taobao-flash"],
+    ["beijing", "jd", "pinduoduo", "taobao", "meituan", "meituan-flash", "taobao-flash", "damai"],
   );
 
-  for (const sourceId of ["beijing", "jd", "pinduoduo", "taobao", "meituan", "meituan-flash", "taobao-flash"]) {
+  const expectedPrecision = {
+    beijing: "millisecond",
+    jd: "second",
+    pinduoduo: "millisecond",
+    taobao: "millisecond",
+    meituan: "second",
+    "meituan-flash": "second",
+    "taobao-flash": "second",
+    damai: "second",
+  };
+
+  for (const [sourceId, precision] of Object.entries(expectedPrecision)) {
     const result = await window.floatingClock.syncSource(sourceId);
-    assert.ok(result.precisionLabel.includes("毫秒"));
+    assert.equal(result.precision, precision);
     assert.ok(Number.isFinite(result.offsetMs));
   }
 });

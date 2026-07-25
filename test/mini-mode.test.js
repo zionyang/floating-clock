@@ -14,6 +14,10 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(html, /<main id="clockShell" class="clock-shell">/);
   assert.match(html, /id="miniModeButton" class="titlebar-action"/);
   assert.match(html, /title="进入 Mini 模式"/);
+  assert.match(
+    html,
+    /<span class="titlebar-drag-surface" data-tauri-drag-region="deep">\s*<span class="time-precision-tooltip presentation-switch-tooltip" role="tooltip">双击切换显示<\/span>\s*<\/span>/,
+  );
   assert.match(html, /class="lucide-icon window-mode-icon"/);
   assert.match(html, /<rect x="3" y="5" width="18" height="14" rx="2" \/>/);
   assert.match(html, /<path d="M7 12h10" \/>/);
@@ -24,6 +28,10 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(html, /id="miniSource" class="mini-source">加载时间源…<\/p>/);
   assert.match(html, /id="miniValue" class="mini-value"/);
   assert.match(html, /id="miniDate" class="mini-date">等待校准<\/p>/);
+  assert.match(
+    html,
+    /<span class="time-precision-tooltip presentation-switch-tooltip mini-presentation-tooltip" role="tooltip">双击切换显示<\/span>/,
+  );
   assert.doesNotMatch(html, /miniDragSurface/);
   assert.match(html, /<div class="mini-actions" data-tauri-drag-region="false">/);
   assert.match(
@@ -39,10 +47,15 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(html, /<path d="M5 12h14" \/>/);
   assert.match(css, /\.clock-shell\.mini\s*\{\s*display:\s*block;\s*padding:\s*10px 12px;\s*cursor:\s*grab;/);
   assert.match(css, /\.clock-shell\.mini > :not\(\.mini-panel\):not\(\.mini-actions\)/);
-  assert.match(css, /\.clock-shell\.mini \.mini-panel\s*\{[\s\S]*?grid-template-rows:\s*13px 40px 14px/);
+  assert.match(css, /\.clock-shell\.mini \.mini-panel\s*\{[\s\S]*?grid-template-rows:\s*12px 40px 12px[\s\S]*?gap:\s*3px[\s\S]*?align-items:\s*center/);
   assert.match(css, /\.mini-source\s*\{[\s\S]*?color:\s*rgba\(255, 225, 161, 0\.96\)[\s\S]*?font-size:\s*11px/);
+  assert.match(css, /\.mini-value\s*\{[\s\S]*?font-size:\s*40px[\s\S]*?transform:\s*translateY\(-2px\)/);
   assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(255, 255, 255, 0\.64\)[\s\S]*?font-size:\s*12px/);
   assert.match(css, /\.clock-shell\.mini:hover \.mini-actions/);
+  assert.match(css, /\.titlebar-drag-surface\s*\{[\s\S]*?right:\s*108px[\s\S]*?left:\s*48px/);
+  assert.match(css, /\.titlebar-drag-surface \.presentation-switch-tooltip\s*\{[\s\S]*?left:\s*calc\(50% \+ 30px\)/);
+  assert.match(css, /\.titlebar-drag-surface:hover \.presentation-switch-tooltip,[\s\S]*?\.mini-panel:hover \.mini-presentation-tooltip/);
+  assert.match(css, /\.mini-presentation-tooltip\s*\{[\s\S]*?top:\s*auto[\s\S]*?bottom:\s*-8px/);
   assert.match(css, /\.mini-actions\s*\{[\s\S]*?top:\s*50%[\s\S]*?right:\s*0[\s\S]*?flex-direction:\s*column/);
   assert.match(css, /\.mini-actions\s*\{[\s\S]*?transform:\s*translate\(4px, -50%\)/);
   assert.match(css, /\.mini-action\s*\{[\s\S]*?width:\s*20px[\s\S]*?height:\s*20px/);

@@ -19,7 +19,13 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_window_state::StateFlags;
 
 const SHORTCUT: &str = "Ctrl+Alt+T";
-const NTP_SERVER: &str = "ntp.ntsc.ac.cn:123";
+const NTP_SERVERS: &[&str] = &[
+    "ntp.ntsc.ac.cn:123",
+    "ntp.tencent.com:123",
+    "ntp.aliyun.com:123",
+    "time.cloudflare.com:123",
+];
+const NTP_TIMEOUT_MS: u64 = 1500;
 const NTP_PACKET_LENGTH: usize = 48;
 const NTP_UNIX_EPOCH_SECONDS: u64 = 2_208_988_800;
 const STANDARD_WINDOW_WIDTH: f64 = 392.0;
@@ -90,6 +96,7 @@ fn strategy_request(strategy_id: &str) -> Option<(&'static str, &'static str, bo
         "meituan-phase" => Some(("GET", "https://www.meituan.com/", true)),
         "meituan-flash-phase" => Some(("GET", "https://brandhub.meituan.com/", true)),
         "taobao-flash-phase" => Some(("GET", "https://www.ele.me/", true)),
+        "damai-phase" => Some(("HEAD", "https://www.damai.cn/", true)),
         _ => None,
     }
 }
@@ -368,16 +375,27 @@ async fn request_ntp_time() -> Result<NtpResponse, String> {
 }
 
 fn request_ntp_time_blocking() -> Result<NtpResponse, String> {
+    let mut failures = Vec::with_capacity(NTP_SERVERS.len());
+
+    for &server in NTP_SERVERS {
+        match request_ntp_time_from_server(server) {
+            Ok(response) => return Ok(response),
+            Err(error) => failures.push(format!("{server}: {error}")),
+        }
+    }
+
+    Err(format!("all NTP servers failed: {}", failures.join("; ")))
+}
+
+fn request_ntp_time_from_server(server: &str) -> Result<NtpResponse, String> {
     let socket = UdpSocket::bind("0.0.0.0:0").map_err(|error| error.to_string())?;
     socket
-        .set_read_timeout(Some(Duration::from_millis(1500)))
+        .set_read_timeout(Some(Duration::from_millis(NTP_TIMEOUT_MS)))
         .map_err(|error| error.to_string())?;
     socket
-        .set_write_timeout(Some(Duration::from_millis(1500)))
+        .set_write_timeout(Some(Duration::from_millis(NTP_TIMEOUT_MS)))
         .map_err(|error| error.to_string())?;
-    socket
-        .connect(NTP_SERVER)
-        .map_err(|error| error.to_string())?;
+    socket.connect(server).map_err(|error| error.to_string())?;
 
     let mut request = [0_u8; NTP_PACKET_LENGTH];
     request[0] = 0x1b;
@@ -639,13 +657,14 @@ mod tests {
     use super::{
         effective_topmost, normalize_mini_width, ntp_request_timestamp, ntp_timestamp,
         should_hide_window_for_shortcut, strategy_request, topmost_change_allowed,
-        MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH,
+        MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
     };
 
     #[test]
     fn network_command_only_accepts_known_time_strategies() {
         assert!(strategy_request("taobao-timestamp").is_some());
         assert!(strategy_request("meituan-flash-phase").is_some());
+        assert!(strategy_request("damai-phase").is_some());
         assert!(strategy_request("https://example.com").is_none());
     }
 
@@ -655,6 +674,14 @@ mod tests {
         packet[40..48].copy_from_slice(&ntp_request_timestamp(1_700_000_000_500).unwrap());
 
         assert_eq!(ntp_timestamp(&packet, 40).unwrap(), 1_700_000_000_500);
+    }
+
+    #[test]
+    fn ntp_uses_ntsc_as_primary_with_verified_fallbacks() {
+        assert_eq!(NTP_SERVERS[0], "ntp.ntsc.ac.cn:123");
+        assert!(NTP_SERVERS.contains(&"ntp.tencent.com:123"));
+        assert!(NTP_SERVERS.contains(&"ntp.aliyun.com:123"));
+        assert!(NTP_SERVERS.contains(&"time.cloudflare.com:123"));
     }
 
     #[test]

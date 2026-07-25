@@ -12,7 +12,7 @@ const {
 const SAMPLE_COUNT = 3;
 const PHASE_PROBE_COUNT = 14;
 const PHASE_PROBE_DELAY_MS = 80;
-const MAX_PHASE_UNCERTAINTY_MS = 100;
+const MAX_MILLISECOND_UNCERTAINTY_MS = 100;
 
 const sources = {
   beijing: {
@@ -24,6 +24,7 @@ const sources = {
         id: "ntsc-ntp",
         label: "国家授时中心 NTP",
         precisionLabel: "毫秒级",
+        precision: "millisecond",
         type: "ntp",
       },
     ],
@@ -36,7 +37,8 @@ const sources = {
       {
         id: "jd-phase",
         label: "京东 API 相位校准",
-        precisionLabel: "毫秒校准",
+        precisionLabel: "秒级",
+        precision: "second",
         type: "date-boundary",
         method: "GET",
         url: "https://api.m.jd.com/",
@@ -52,6 +54,7 @@ const sources = {
         id: "pdd-server-time",
         label: "拼多多 _stm",
         precisionLabel: "毫秒级",
+        precision: "millisecond",
         method: "GET",
         url: "https://api.pinduoduo.com/api/server/_stm",
         parse: ({ body }) => parsePinduoduoBody(body),
@@ -60,6 +63,7 @@ const sources = {
         id: "pdd-yak-time",
         label: "拼多多 yak-timeinfo",
         precisionLabel: "毫秒级",
+        precision: "millisecond",
         method: "HEAD",
         url: "https://www.pinduoduo.com/",
         parse: ({ headers }) => parsePinduoduoYakTime(headers),
@@ -67,7 +71,8 @@ const sources = {
       {
         id: "pdd-phase",
         label: "拼多多 Date 相位校准",
-        precisionLabel: "毫秒校准",
+        precisionLabel: "秒级",
+        precision: "second",
         type: "date-boundary",
         method: "GET",
         url: "https://www.pinduoduo.com/",
@@ -83,6 +88,7 @@ const sources = {
         id: "taobao-timestamp",
         label: "淘宝 H5 时间戳",
         precisionLabel: "毫秒级",
+        precision: "millisecond",
         method: "GET",
         url: "https://h5api.m.taobao.com/h5/mtop.common.gettimestamp/1.0/",
         parse: ({ body }) => parseTaobaoBody(body),
@@ -90,7 +96,8 @@ const sources = {
       {
         id: "taobao-phase",
         label: "淘宝 Date 相位校准",
-        precisionLabel: "毫秒校准",
+        precisionLabel: "秒级",
+        precision: "second",
         type: "date-boundary",
         method: "GET",
         url: "https://www.taobao.com/",
@@ -105,7 +112,8 @@ const sources = {
       {
         id: "meituan-phase",
         label: "美团官网相位校准",
-        precisionLabel: "毫秒校准",
+        precisionLabel: "秒级",
+        precision: "second",
         type: "date-boundary",
         method: "GET",
         url: "https://www.meituan.com/",
@@ -120,7 +128,8 @@ const sources = {
       {
         id: "meituan-flash-phase",
         label: "美团闪购相位校准",
-        precisionLabel: "毫秒校准",
+        precisionLabel: "秒级",
+        precision: "second",
         type: "date-boundary",
         method: "GET",
         url: "https://brandhub.meituan.com/",
@@ -135,10 +144,27 @@ const sources = {
       {
         id: "taobao-flash-phase",
         label: "淘宝闪购相位校准",
-        precisionLabel: "毫秒校准",
+        precisionLabel: "秒级",
+        precision: "second",
         type: "date-boundary",
         method: "GET",
         url: "https://www.ele.me/",
+      },
+    ],
+  },
+  damai: {
+    id: "damai",
+    label: "大麦时间",
+    description: "大麦官网时间",
+    strategies: [
+      {
+        id: "damai-phase",
+        label: "大麦官网相位校准",
+        precisionLabel: "秒级",
+        precision: "second",
+        type: "date-boundary",
+        method: "HEAD",
+        url: "https://www.damai.cn/",
       },
     ],
   },
@@ -174,15 +200,38 @@ async function synchronizeSource(sourceId) {
     }
 
     if (samples.length) {
+      const sample = selectBestSample(samples);
       return {
         sourceId: source.id,
         sourceLabel: source.label,
-        ...selectBestSample(samples),
+        ...toDisplayPrecision(sample),
       };
     }
   }
 
   throw new Error(failures.at(-1) || `${source.label} synchronization failed.`);
+}
+
+function toDisplayPrecision(sample) {
+  const supportsMilliseconds = sample.precision === "millisecond";
+
+  if (sample.strategyId === "ntsc-ntp") {
+    return { ...sample, supportsMilliseconds };
+  }
+
+  if (
+    supportsMilliseconds
+    && sample.uncertaintyMs > MAX_MILLISECOND_UNCERTAINTY_MS
+  ) {
+    return {
+      ...sample,
+      supportsMilliseconds,
+      precision: "second",
+      precisionLabel: "秒级",
+    };
+  }
+
+  return { ...sample, supportsMilliseconds };
 }
 
 async function collectSample(strategy) {
@@ -208,10 +257,7 @@ async function collectDateBoundarySample(strategy) {
     const current = await collectHttpDateSample(strategy);
 
     if (previous && current.remoteEpochMs === previous.remoteEpochMs + 1000) {
-      const sample = buildDateBoundarySample(previous, current, strategy);
-      if (sample.uncertaintyMs <= MAX_PHASE_UNCERTAINTY_MS) {
-        return sample;
-      }
+      return buildDateBoundarySample(previous, current, strategy);
     }
 
     previous = current;
@@ -221,7 +267,7 @@ async function collectDateBoundarySample(strategy) {
     }
   }
 
-  throw new Error(`${strategy.label} did not produce a ${MAX_PHASE_UNCERTAINTY_MS} ms phase window.`);
+  throw new Error(`${strategy.label} did not produce a Date boundary.`);
 }
 
 async function collectHttpSample(strategy) {

@@ -57,6 +57,7 @@ function buildSample(remoteEpochMs, startedAtMs, finishedAtMs, strategy) {
     strategyId: strategy.id,
     strategyLabel: strategy.label,
     precisionLabel: strategy.precisionLabel,
+    precision: strategy.precision,
     uncertaintyMs: Math.ceil(roundTripMs / 2),
   };
 }
@@ -79,6 +80,7 @@ function buildDateBoundarySample(previous, next, strategy) {
     strategyId: strategy.id,
     strategyLabel: strategy.label,
     precisionLabel: strategy.precisionLabel,
+    precision: strategy.precision,
   };
 }
 
@@ -99,6 +101,7 @@ function buildNtpSample(response, strategy) {
     strategyId: strategy.id,
     strategyLabel: strategy.label,
     precisionLabel: strategy.precisionLabel,
+    precision: strategy.precision,
   };
 }
 

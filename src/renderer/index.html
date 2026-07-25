@@ -15,6 +15,9 @@
             <path d="M7 12h10" />
           </svg>
         </button>
+        <span class="titlebar-drag-surface" data-tauri-drag-region="deep">
+          <span class="time-precision-tooltip presentation-switch-tooltip" role="tooltip">双击切换显示</span>
+        </span>
         <span class="title-name">悬浮时钟</span>
         <div class="window-actions" data-tauri-drag-region="false">
           <button id="topmostButton" class="titlebar-action" type="button" title="取消窗口置顶" aria-label="取消窗口置顶">
@@ -52,18 +55,18 @@
         <button id="countdownModeButton" type="button" role="tab" aria-selected="false">倒计时</button>
       </section>
 
-      <section id="clockPanel" class="time-panel">
-        <div class="time-value-wrapper">
-          <button id="clockValue" class="time-value time-value-toggle" type="button" aria-describedby="clockPrecisionTooltip" aria-label="显示整秒">--:--:--</button>
-          <span id="clockPrecisionTooltip" class="time-precision-tooltip" role="tooltip">显示整秒</span>
+        <section id="clockPanel" class="time-panel">
+          <div class="time-value-wrapper">
+            <button id="clockValue" class="time-value time-value-toggle" type="button" aria-describedby="clockPrecisionTooltip" aria-label="显示整秒">--:--:--</button>
+            <span id="clockPrecisionTooltip" class="time-precision-tooltip" role="tooltip" hidden>显示整秒</span>
         </div>
         <p class="time-subvalue" id="dateValue">等待校准</p>
       </section>
 
-      <section id="countdownPanel" class="time-panel countdown-panel" hidden>
-        <div class="time-value-wrapper">
-          <button id="countdownValue" class="time-value time-value-toggle countdown-value" type="button" aria-describedby="countdownPrecisionTooltip" aria-label="显示整秒">00:00:00.000</button>
-          <span id="countdownPrecisionTooltip" class="time-precision-tooltip" role="tooltip">显示整秒</span>
+        <section id="countdownPanel" class="time-panel countdown-panel" hidden>
+          <div class="time-value-wrapper">
+            <button id="countdownValue" class="time-value time-value-toggle countdown-value" type="button" aria-describedby="countdownPrecisionTooltip" aria-label="显示整秒">00:00:00.000</button>
+            <span id="countdownPrecisionTooltip" class="time-precision-tooltip" role="tooltip" hidden>显示整秒</span>
         </div>
         <label class="target-row">
           <span>目标北京时间</span>
@@ -82,13 +85,17 @@
 
       <footer class="statusbar">
         <p id="syncStatus">准备校准</p>
-        <p id="offsetStatus">本机偏移 --</p>
+        <div class="statusbar-detail">
+          <p id="offsetStatus">本机偏移 --</p>
+          <p id="precisionNotice" class="precision-notice" role="status" hidden></p>
+        </div>
       </footer>
 
       <section class="mini-panel" aria-label="Mini 模式时间">
         <p id="miniSource" class="mini-source">加载时间源…</p>
         <p id="miniValue" class="mini-value">--:--:--.---</p>
         <p id="miniDate" class="mini-date">等待校准</p>
+        <span class="time-precision-tooltip presentation-switch-tooltip mini-presentation-tooltip" role="tooltip">双击切换显示</span>
       </section>
       <div class="mini-actions" data-tauri-drag-region="false">
         <button id="miniCloseButton" class="mini-action" type="button" title="退出程序" aria-label="退出程序">
