@@ -107,11 +107,11 @@ test("Tauri bridge exposes Mini presentation changes", async () => {
   assert.equal(received.mini, false);
 });
 
-test("Meituan keeps its own seconds-level Date calibration when the boundary window exceeds 100 ms", async () => {
+test("Meituan falls back to its own seconds-level Date calibration when the millisecond endpoint fails", async () => {
   const calls = [];
   const baseDate = 1_700_000_000_000;
   const dates = [baseDate + 1000, baseDate + 2000].map((value) => new Date(value).toUTCString());
-  const timestamps = [100, 450, 500, 800];
+  const timestamps = [0, 0, 0, 100, 450, 500, 800];
   const MockDate = function MockDate(...argumentsList) {
     return new Date(...argumentsList);
   };
@@ -122,6 +122,9 @@ test("Meituan keeps its own seconds-level Date calibration when the boundary win
       core: {
         invoke: async (command, arguments) => {
           calls.push({ command, arguments });
+          if (arguments.strategyId === "meituan-server-time") {
+            throw new Error("HTTP 403");
+          }
           return { body: "", headers: { date: dates.shift() }, statusCode: 200 };
         },
       },
@@ -146,8 +149,20 @@ test("Meituan keeps its own seconds-level Date calibration when the boundary win
   assert.equal(result.precision, "second");
   assert.equal(result.precisionLabel, "秒级");
   assert.equal(result.uncertaintyMs, 350);
-  assert.deepEqual(calls.map(({ command }) => command), ["request_time", "request_time"]);
-  assert.deepEqual(calls.map(({ arguments }) => arguments.strategyId), ["meituan-phase", "meituan-phase"]);
+  assert.deepEqual(calls.map(({ command }) => command), [
+    "request_time",
+    "request_time",
+    "request_time",
+    "request_time",
+    "request_time",
+  ]);
+  assert.deepEqual(calls.map(({ arguments }) => arguments.strategyId), [
+    "meituan-server-time",
+    "meituan-server-time",
+    "meituan-server-time",
+    "meituan-phase",
+    "meituan-phase",
+  ]);
 });
 
 test("a direct millisecond field falls back to seconds display when network uncertainty is too high", async () => {
@@ -222,8 +237,25 @@ test("listed sources report their actual precision and include Damai", async () 
           if (strategyId === "pdd-server-time") {
             return { body: JSON.stringify({ server_time: baseDate }), headers: {}, statusCode: 200 };
           }
-          if (strategyId === "taobao-timestamp") {
+          if (strategyId === "taobao-timestamp" || strategyId === "taobao-flash-timestamp" || strategyId === "damai-timestamp") {
             return { body: JSON.stringify({ data: { t: baseDate } }), headers: {}, statusCode: 200 };
+          }
+          if (strategyId === "jd-request-id") {
+            return {
+              body: "",
+              headers: {
+                date: new Date(baseDate).toUTCString(),
+                "x-api-request-id": `10192119733-147598-${baseDate}`,
+              },
+              statusCode: 200,
+            };
+          }
+          if (strategyId === "meituan-server-time" || strategyId === "meituan-flash-server-time") {
+            return {
+              body: JSON.stringify({ data: baseDate, message: "成功", status: 0 }),
+              headers: {},
+              statusCode: 200,
+            };
           }
 
           const count = phaseCalls.get(strategyId) || 0;
@@ -258,13 +290,13 @@ test("listed sources report their actual precision and include Damai", async () 
 
   const expectedPrecision = {
     beijing: "millisecond",
-    jd: "second",
+    jd: "millisecond",
     pinduoduo: "millisecond",
     taobao: "millisecond",
-    meituan: "second",
-    "meituan-flash": "second",
-    "taobao-flash": "second",
-    damai: "second",
+    meituan: "millisecond",
+    "meituan-flash": "millisecond",
+    "taobao-flash": "millisecond",
+    damai: "millisecond",
   };
 
   for (const [sourceId, precision] of Object.entries(expectedPrecision)) {

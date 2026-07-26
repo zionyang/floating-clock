@@ -35,6 +35,36 @@ function parsePinduoduoYakTime(headers) {
   return epochMs;
 }
 
+function parseJdRequestId(headers) {
+  const rawValue = headers["x-api-request-id"];
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  const tail = typeof value === "string" ? value.split("-").at(-1) : "";
+
+  if (!/^\d{13}$/.test(tail)) {
+    throw new Error("JD did not return a millisecond X-API-Request-Id.");
+  }
+
+  const epochMs = Number(tail);
+  const dateEpochMs = parseHttpDate(headers);
+
+  if (Math.abs(epochMs - dateEpochMs) > 3000) {
+    throw new Error("JD X-API-Request-Id disagreed with the Date header.");
+  }
+
+  return epochMs;
+}
+
+function parseMeituanBody(body) {
+  const payload = JSON.parse(body);
+  const epochMs = Number(payload?.data);
+
+  if (payload?.status !== 0 || !Number.isFinite(epochMs)) {
+    throw new Error("Meituan did not return a server time.");
+  }
+
+  return epochMs;
+}
+
 function parseTaobaoBody(body) {
   const payload = JSON.parse(body);
   const epochMs = Number(payload?.data?.t);
@@ -118,6 +148,8 @@ const timeCore = {
   buildNtpSample,
   buildSample,
   parseHttpDate,
+  parseJdRequestId,
+  parseMeituanBody,
   parsePinduoduoBody,
   parsePinduoduoYakTime,
   parseTaobaoBody,
