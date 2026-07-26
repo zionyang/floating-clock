@@ -46,6 +46,13 @@ Mini 模式从标题栏左侧的收起图标、标题栏可拖动空白区的双
 
 Mini 的置顶仅作用于当前 Windows 虚拟桌面，不会自动显示在所有虚拟桌面。需要跨桌面可见时，请在 Windows 任务视图中对该窗口或应用使用“在所有桌面上显示”。
 
+## 隐私、第三方服务与使用限制
+
+- 本项目不设自有后端；代码不包含向开发者收集、上传或共享个人数据的功能。窗口位置、显示模式和时间源等偏好仅保存在本机。
+- 校时会向以下第三方发起网络请求：NTP 服务 `ntp.ntsc.ac.cn`、`ntp.tencent.com`、`ntp.aliyun.com`、`time.cloudflare.com`；HTTP 服务 `api.m.jd.com`、`api.pinduoduo.com`、`www.pinduoduo.com`、`h5api.m.taobao.com`、`www.taobao.com`、`www.meituan.com`、`brandhub.meituan.com`、`www.ele.me` 和 `www.damai.cn`。与任何普通网络请求一样，这些服务可接收请求来源 IP 地址和 `User-Agent`。
+- 本项目是独立开源项目，不代表、未获上述服务商授权，也不保证与其服务持续兼容。
+- 第三方端点可能变更、限流、拒绝访问或返回不适合校时的数据；应用会按现有策略降级或回退，但不保证校时可用性、精度或抢购结果。
+
 ## 运行
 
 ```powershell
@@ -68,3 +75,7 @@ npm run tauri:build
 ```
 
 正式分发文件会写入 `dist/`；`src-tauri/target/release` 及其 `bundle/` 子目录是 Tauri 的内部构建产物。NSIS 安装程序使用 Tauri 的 `downloadBootstrapper` 模式：目标电脑缺少 WebView2 时，安装过程需要联网下载运行时。
+
+## 许可证
+
+[MIT](LICENSE)

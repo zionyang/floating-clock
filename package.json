@@ -2,6 +2,7 @@
   "name": "floating-clock",
   "version": "0.1.2",
   "description": "A lightweight Windows floating clock with marketplace time-source switching and countdown mode.",
+  "license": "MIT",
   "scripts": {
     "dev": "tauri dev",
     "tauri:build": "pwsh -NoProfile -File build.ps1",
