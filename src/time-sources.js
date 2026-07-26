@@ -3,6 +3,8 @@ const {
   buildNtpSample,
   buildSample,
   parseHttpDate,
+  parseJdRequestId,
+  parseMeituanBody,
   parsePinduoduoBody,
   parsePinduoduoYakTime,
   parseTaobaoBody,
@@ -32,8 +34,17 @@ const sources = {
   jd: {
     id: "jd",
     label: "京东时间",
-    description: "京东 API 秒边界校准",
+    description: "京东 API 毫秒时间戳",
     strategies: [
+      {
+        id: "jd-request-id",
+        label: "京东 API 毫秒时间戳",
+        precisionLabel: "毫秒级",
+        precision: "millisecond",
+        method: "HEAD",
+        url: "https://api.m.jd.com/",
+        parse: ({ headers }) => parseJdRequestId(headers),
+      },
       {
         id: "jd-phase",
         label: "京东 API 相位校准",
@@ -107,8 +118,17 @@ const sources = {
   meituan: {
     id: "meituan",
     label: "美团时间",
-    description: "美团官网秒边界校准",
+    description: "美团服务器毫秒时间",
     strategies: [
+      {
+        id: "meituan-server-time",
+        label: "美团服务器时间",
+        precisionLabel: "毫秒级",
+        precision: "millisecond",
+        method: "GET",
+        url: "https://cube.meituan.com/ipromotion/cube/toc/component/base/getServerCurrentTime",
+        parse: ({ body }) => parseMeituanBody(body),
+      },
       {
         id: "meituan-phase",
         label: "美团官网相位校准",
@@ -123,8 +143,17 @@ const sources = {
   "meituan-flash": {
     id: "meituan-flash",
     label: "美团闪购时间",
-    description: "美团闪购官网秒边界校准",
+    description: "与美团共用毫秒时基",
     strategies: [
+      {
+        id: "meituan-flash-server-time",
+        label: "美团服务器时间（闪购共用）",
+        precisionLabel: "毫秒级",
+        precision: "millisecond",
+        method: "GET",
+        url: "https://cube.meituan.com/ipromotion/cube/toc/component/base/getServerCurrentTime",
+        parse: ({ body }) => parseMeituanBody(body),
+      },
       {
         id: "meituan-flash-phase",
         label: "美团闪购相位校准",
@@ -139,8 +168,17 @@ const sources = {
   "taobao-flash": {
     id: "taobao-flash",
     label: "淘宝闪购时间",
-    description: "淘宝闪购官网秒边界校准",
+    description: "饿了么网关毫秒时间戳",
     strategies: [
+      {
+        id: "taobao-flash-timestamp",
+        label: "饿了么 H5 时间戳",
+        precisionLabel: "毫秒级",
+        precision: "millisecond",
+        method: "GET",
+        url: "https://waimai-guide.ele.me/h5/mtop.common.gettimestamp/1.0/",
+        parse: ({ body }) => parseTaobaoBody(body),
+      },
       {
         id: "taobao-flash-phase",
         label: "淘宝闪购相位校准",
@@ -155,8 +193,17 @@ const sources = {
   damai: {
     id: "damai",
     label: "大麦时间",
-    description: "大麦官网时间",
+    description: "大麦网关毫秒时间戳",
     strategies: [
+      {
+        id: "damai-timestamp",
+        label: "大麦 H5 时间戳",
+        precisionLabel: "毫秒级",
+        precision: "millisecond",
+        method: "GET",
+        url: "https://mtop.damai.cn/h5/mtop.common.gettimestamp/1.0/",
+        parse: ({ body }) => parseTaobaoBody(body),
+      },
       {
         id: "damai-phase",
         label: "大麦官网相位校准",

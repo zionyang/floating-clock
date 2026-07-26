@@ -83,6 +83,7 @@ struct NtpResponse {
 
 fn strategy_request(strategy_id: &str) -> Option<(&'static str, &'static str, bool)> {
     match strategy_id {
+        "jd-request-id" => Some(("HEAD", "https://api.m.jd.com/", false)),
         "jd-phase" => Some(("GET", "https://api.m.jd.com/", true)),
         "pdd-server-time" => Some(("GET", "https://api.pinduoduo.com/api/server/_stm", false)),
         "pdd-yak-time" => Some(("HEAD", "https://www.pinduoduo.com/", false)),
@@ -93,9 +94,24 @@ fn strategy_request(strategy_id: &str) -> Option<(&'static str, &'static str, bo
             false,
         )),
         "taobao-phase" => Some(("GET", "https://www.taobao.com/", true)),
+        "meituan-server-time" | "meituan-flash-server-time" => Some((
+            "GET",
+            "https://cube.meituan.com/ipromotion/cube/toc/component/base/getServerCurrentTime",
+            false,
+        )),
         "meituan-phase" => Some(("GET", "https://www.meituan.com/", true)),
         "meituan-flash-phase" => Some(("GET", "https://brandhub.meituan.com/", true)),
+        "taobao-flash-timestamp" => Some((
+            "GET",
+            "https://waimai-guide.ele.me/h5/mtop.common.gettimestamp/1.0/",
+            false,
+        )),
         "taobao-flash-phase" => Some(("GET", "https://www.ele.me/", true)),
+        "damai-timestamp" => Some((
+            "GET",
+            "https://mtop.damai.cn/h5/mtop.common.gettimestamp/1.0/",
+            false,
+        )),
         "damai-phase" => Some(("HEAD", "https://www.damai.cn/", true)),
         _ => None,
     }
@@ -662,8 +678,13 @@ mod tests {
 
     #[test]
     fn network_command_only_accepts_known_time_strategies() {
+        assert!(strategy_request("jd-request-id").is_some());
         assert!(strategy_request("taobao-timestamp").is_some());
+        assert!(strategy_request("meituan-server-time").is_some());
+        assert!(strategy_request("meituan-flash-server-time").is_some());
         assert!(strategy_request("meituan-flash-phase").is_some());
+        assert!(strategy_request("taobao-flash-timestamp").is_some());
+        assert!(strategy_request("damai-timestamp").is_some());
         assert!(strategy_request("damai-phase").is_some());
         assert!(strategy_request("https://example.com").is_none());
     }

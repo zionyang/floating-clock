@@ -5,6 +5,8 @@ const {
   buildNtpSample,
   buildSample,
   parseHttpDate,
+  parseJdRequestId,
+  parseMeituanBody,
   parsePinduoduoBody,
   parsePinduoduoYakTime,
   parseTaobaoBody,
@@ -19,6 +21,33 @@ test("parses response timestamps from each supported payload shape", () => {
   assert.equal(parsePinduoduoBody('{"server_time":1779334800339}'), 1779334800339);
   assert.equal(parsePinduoduoYakTime({ "yak-timeinfo": "1779334701993|3" }), 1779334701993);
   assert.equal(parseTaobaoBody('{"data":{"t":"1779334837885"}}'), 1779334837885);
+  assert.equal(
+    parseJdRequestId({
+      "x-api-request-id": "10192119733-147598-1779334800339",
+      date: new Date(1779334800339).toUTCString(),
+    }),
+    1779334800339,
+  );
+  assert.equal(parseMeituanBody('{"data":1779334800339,"message":"成功","status":0}'), 1779334800339);
+});
+
+test("rejects JD request ids and Meituan payloads that fail validation", () => {
+  const date = new Date(1779334800339).toUTCString();
+
+  assert.throws(() => parseJdRequestId({ date }), /X-API-Request-Id/);
+  assert.throws(
+    () => parseJdRequestId({ "x-api-request-id": "10192119733-147598-12345", date }),
+    /X-API-Request-Id/,
+  );
+  assert.throws(
+    () => parseJdRequestId({
+      "x-api-request-id": "10192119733-147598-1779334800339",
+      date: new Date(1779334800339 + 60_000).toUTCString(),
+    }),
+    /disagreed with the Date header/,
+  );
+  assert.throws(() => parseMeituanBody('{"data":1779334800339,"status":1}'), /server time/);
+  assert.throws(() => parseMeituanBody('{"message":"成功","status":0}'), /server time/);
 });
 
 test("builds offsets from the request midpoint and keeps the fastest sample", () => {
