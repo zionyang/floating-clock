@@ -12,7 +12,8 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   const capability = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "capabilities", "default.json"), "utf8");
 
   assert.match(html, /<main id="clockShell" class="clock-shell">/);
-  assert.match(html, /id="miniModeButton" class="titlebar-action"/);
+  assert.match(html, /<div class="titlebar-left-actions" data-tauri-drag-region="false">\s*<button id="miniModeButton" class="titlebar-action"/);
+  assert.match(html, /id="miniModeButton"[\s\S]*?id="topmostButton"[\s\S]*?class="window-actions"[\s\S]*?id="minimizeButton"[\s\S]*?id="closeButton"/);
   assert.match(html, /title="进入 Mini 模式"/);
   assert.match(
     html,
@@ -50,9 +51,9 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /\.clock-shell\.mini \.mini-panel\s*\{[\s\S]*?grid-template-rows:\s*12px 40px 12px[\s\S]*?gap:\s*3px[\s\S]*?align-items:\s*center/);
   assert.match(css, /\.mini-source\s*\{[\s\S]*?color:\s*var\(--color-mini-source\)[\s\S]*?font-size:\s*11px/);
   assert.match(css, /\.mini-value\s*\{[\s\S]*?font-size:\s*40px[\s\S]*?transform:\s*translateY\(-2px\)/);
-  assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(var\(--color-overlay-rgb\), 0\.64\)[\s\S]*?font-size:\s*12px/);
+  assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(var\(--color-text-rgb\), 0\.64\)[\s\S]*?font-size:\s*12px/);
   assert.match(css, /\.clock-shell\.mini:hover \.mini-actions/);
-  assert.match(css, /\.titlebar-drag-surface\s*\{[\s\S]*?right:\s*108px[\s\S]*?left:\s*48px/);
+  assert.match(css, /\.titlebar-drag-surface\s*\{[\s\S]*?right:\s*80px[\s\S]*?left:\s*80px/);
   assert.match(css, /\.titlebar-drag-surface \.presentation-switch-tooltip\s*\{[\s\S]*?left:\s*calc\(50% \+ 30px\)/);
   assert.match(css, /\.titlebar-drag-surface:hover \.presentation-switch-tooltip,[\s\S]*?\.mini-panel:hover \.mini-presentation-tooltip/);
   assert.match(css, /\.mini-presentation-tooltip\s*\{[\s\S]*?top:\s*auto[\s\S]*?bottom:\s*-8px/);

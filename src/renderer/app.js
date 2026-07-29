@@ -31,7 +31,14 @@ const elements = {
   syncButton: document.querySelector("#syncButton"),
   syncStatus: document.querySelector("#syncStatus"),
   targetInput: document.querySelector("#targetInput"),
+  themeMenu: document.querySelector("#themeMenu"),
+  themeOptions: document.querySelector("#themeOptions"),
+  themeSelect: document.querySelector("#themeSelect"),
+  themeOptionButtons: document.querySelectorAll(".theme-option"),
   titlebar: document.querySelector(".titlebar"),
+  titleBadge: document.querySelector("#titleBadge"),
+  titleMain: document.querySelector("#titleMain"),
+  titleSubtitle: document.querySelector("#titleSubtitle"),
   quickTargetButtons: document.querySelectorAll("[data-quick-target]"),
 };
 const {
@@ -44,9 +51,17 @@ const CRITICAL_WINDOW_MS = 5000;
 const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
 const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
+const THEME_TITLES = {
+  amber: { title: "悬浮时钟", badge: "🌙", subtitle: "AMBER" },
+  light: { title: "悬浮时钟", badge: "☀️", subtitle: "MIST" },
+  black: { title: "悬浮时钟", badge: "🟢", subtitle: "JADE" },
+  sakura: { title: "悬浮时钟", badge: "🌸", subtitle: "SAKURA" },
+};
+const THEME_IDS = new Set(Object.keys(THEME_TITLES));
 const STORAGE_KEYS = {
   mode: "floatingClock.mode",
   sourceId: "floatingClock.sourceId",
+  theme: "floatingClock.theme",
 };
 const state = {
   countdownTargetEpochMs: null,
@@ -68,6 +83,7 @@ const state = {
   sourceId: readStoredSourceId(),
   sources: [],
   syncTimer: null,
+  theme: readStoredTheme(),
 };
 
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -85,6 +101,7 @@ const timeFormatter = new Intl.DateTimeFormat("en-GB", {
   second: "2-digit",
 });
 
+applyTheme(state.theme, false);
 bootstrap();
 
 async function bootstrap() {
@@ -158,13 +175,20 @@ function bindEvents() {
   }, true);
   elements.miniPanel.addEventListener("dblclick", () => setWindowPresentation(false));
   elements.syncButton.addEventListener("click", syncSelectedSource);
+  elements.themeOptionButtons.forEach((button) => {
+    button.addEventListener("click", () => applyTheme(button.dataset.theme));
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
       return;
     }
 
-    if (state.presentation === "standard" && elements.sourceMenu.open) {
+    if (
+      state.presentation === "standard"
+      && (elements.sourceMenu.open || elements.themeMenu.open)
+    ) {
       elements.sourceMenu.open = false;
+      elements.themeMenu.open = false;
       document.activeElement?.blur();
       return;
     }
@@ -175,6 +199,9 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     if (!elements.sourceMenu.contains(event.target)) {
       elements.sourceMenu.open = false;
+    }
+    if (!elements.themeMenu.contains(event.target)) {
+      elements.themeMenu.open = false;
     }
   });
 
@@ -589,4 +616,34 @@ function readStoredMode() {
 
 function readStoredSourceId() {
   return localStorage.getItem(STORAGE_KEYS.sourceId) || "beijing";
+}
+
+function readStoredTheme() {
+  const theme = localStorage.getItem(STORAGE_KEYS.theme);
+  return THEME_IDS.has(theme) ? theme : "amber";
+}
+
+function applyTheme(theme, persist = true) {
+  if (!THEME_IDS.has(theme)) {
+    theme = "amber";
+  }
+
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  elements.titleMain.textContent = THEME_TITLES[theme].title;
+  elements.titleBadge.textContent = THEME_TITLES[theme].badge;
+  elements.titleSubtitle.textContent = THEME_TITLES[theme].subtitle;
+  elements.themeMenu.open = false;
+
+  elements.themeOptionButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.theme === theme));
+  });
+
+  const label = elements.themeOptions.querySelector(`[data-theme="${theme}"]`)?.textContent || "琥珀暗";
+  elements.themeSelect.title = `切换主题（当前：${label}）`;
+  elements.themeSelect.setAttribute("aria-label", elements.themeSelect.title);
+
+  if (persist) {
+    localStorage.setItem(STORAGE_KEYS.theme, theme);
+  }
 }
