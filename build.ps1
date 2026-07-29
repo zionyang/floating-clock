@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY) -and (Test-Path
     $env:TAURI_SIGNING_PRIVATE_KEY = $defaultSigningKey
 }
 if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) -and (Test-Path -LiteralPath $encryptedPasswordFile)) {
-    $securePassword = Get-Content -LiteralPath $encryptedPasswordFile -Raw | ConvertTo-SecureString
+    $securePassword = (Get-Content -LiteralPath $encryptedPasswordFile -Raw).Trim() | ConvertTo-SecureString
     $credential = [PSCredential]::new("updater", $securePassword)
     $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = $credential.GetNetworkCredential().Password
 }
