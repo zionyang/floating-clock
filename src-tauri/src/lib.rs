@@ -16,6 +16,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_updater::UpdaterExt;
 use tauri_plugin_window_state::StateFlags;
 
 const SHORTCUT: &str = "Ctrl+Alt+T";
@@ -48,6 +49,12 @@ struct ControlsMenu {
     topmost: CheckMenuItem<tauri::Wry>,
     mini: CheckMenuItem<tauri::Wry>,
     click_through: CheckMenuItem<tauri::Wry>,
+}
+
+struct UpdateMenu {
+    item: MenuItem<tauri::Wry>,
+    available: AtomicBool,
+    busy: AtomicBool,
 }
 
 #[derive(Clone, Serialize)]
@@ -142,6 +149,81 @@ fn toggle_window(app: &AppHandle) {
     }
 }
 
+fn supports_self_update(exe_name: Option<&str>) -> bool {
+    // ponytail: the distributed portable file is renamed; use an installer marker if names converge.
+    exe_name.is_some_and(|name| name.eq_ignore_ascii_case("floating-clock.exe"))
+}
+
+fn running_installed_build() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name()?.to_str().map(str::to_owned))
+        .as_deref()
+        .is_some_and(|name| supports_self_update(Some(name)))
+}
+
+async fn check_for_update(app: AppHandle, install: bool, announce_current: bool) {
+    let menu = app.state::<UpdateMenu>();
+    if menu
+        .busy
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_err()
+    {
+        return;
+    }
+    let _ = menu.item.set_enabled(false);
+    let _ = menu.item.set_text(if install {
+        "正在准备更新…"
+    } else {
+        "正在检查更新…"
+    });
+
+    let result = async {
+        let Some(update) = app
+            .updater()
+            .map_err(|error| error.to_string())?
+            .check()
+            .await
+            .map_err(|error| error.to_string())?
+        else {
+            return Ok::<_, String>(None);
+        };
+        let version = update.version.to_string();
+        if install {
+            let _ = menu.item.set_text(format!("正在下载 {version}…"));
+            update
+                .download_and_install(|_, _| {}, || {})
+                .await
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(Some(version))
+    }
+    .await;
+
+    match result {
+        Ok(Some(version)) if !install => {
+            menu.available.store(true, Ordering::Relaxed);
+            let _ = menu.item.set_text(format!("安装更新 {version}"));
+        }
+        Ok(None) => {
+            menu.available.store(false, Ordering::Relaxed);
+            let _ = menu.item.set_text(if announce_current {
+                "已是最新版本（点击检查）"
+            } else {
+                "检查更新"
+            });
+        }
+        Err(error) => {
+            eprintln!("Update failed: {error}");
+            menu.available.store(false, Ordering::Relaxed);
+            let _ = menu.item.set_text("更新检查失败（点击重试）");
+        }
+        _ => {}
+    }
+    menu.busy.store(false, Ordering::Relaxed);
+    let _ = menu.item.set_enabled(true);
+}
+
 fn window_controls(app: &AppHandle) -> Result<WindowControls, String> {
     let state = app.state::<ControlsState>();
     let mini = state.mini.load(Ordering::Relaxed);
@@ -191,9 +273,7 @@ fn apply_topmost(app: &AppHandle, enabled: bool) -> Result<WindowControls, Strin
     window
         .set_always_on_top(enabled)
         .map_err(|error| error.to_string())?;
-    state
-        .standard_topmost
-        .store(enabled, Ordering::Relaxed);
+    state.standard_topmost.store(enabled, Ordering::Relaxed);
     app.state::<ControlsMenu>()
         .topmost
         .set_checked(enabled)
@@ -524,6 +604,18 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
     let click_through =
         CheckMenuItem::with_id(app, "click-through", "鼠标穿透", true, false, None::<&str>)?;
     let separator_two = PredefinedMenuItem::separator(app)?;
+    let installed_build = running_installed_build();
+    let update = MenuItem::with_id(
+        app,
+        "update",
+        if installed_build {
+            "检查更新"
+        } else {
+            "便携版不支持自动更新"
+        },
+        installed_build,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -536,6 +628,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
             &mini,
             &click_through,
             &separator_two,
+            &update,
             &quit,
         ],
     )?;
@@ -545,6 +638,11 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         topmost,
         mini,
         click_through,
+    });
+    app.manage(UpdateMenu {
+        item: update,
+        available: AtomicBool::new(false),
+        busy: AtomicBool::new(false),
     });
 
     TrayIconBuilder::new()
@@ -585,6 +683,13 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
                     .load(Ordering::Relaxed);
                 let _ = apply_click_through(app, enabled);
             }
+            "update" => {
+                let install = app.state::<UpdateMenu>().available.load(Ordering::Relaxed);
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    check_for_update(app, install, true).await;
+                });
+            }
             "quit" => app.exit(0),
             _ => {}
         })
@@ -623,6 +728,7 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::POSITION)
@@ -662,6 +768,12 @@ pub fn run() {
                 }
             };
             setup_tray(app, shortcut_available)?;
+            if running_installed_build() {
+                let app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    check_for_update(app, false, false).await;
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -672,8 +784,8 @@ pub fn run() {
 mod tests {
     use super::{
         effective_topmost, normalize_mini_width, ntp_request_timestamp, ntp_timestamp,
-        should_hide_window_for_shortcut, strategy_request, topmost_change_allowed,
-        MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
+        should_hide_window_for_shortcut, strategy_request, supports_self_update,
+        topmost_change_allowed, MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
     };
 
     #[test]
@@ -732,5 +844,15 @@ mod tests {
         assert_eq!(normalize_mini_width(1.0), MINI_WINDOW_MIN_WIDTH);
         assert_eq!(normalize_mini_width(320.0), 320.0);
         assert_eq!(normalize_mini_width(10_000.0), MINI_WINDOW_MAX_WIDTH);
+    }
+
+    #[test]
+    fn only_installed_executable_name_enables_self_update() {
+        assert!(supports_self_update(Some("floating-clock.exe")));
+        assert!(supports_self_update(Some("FLOATING-CLOCK.EXE")));
+        assert!(!supports_self_update(Some(
+            "FloatingClock-0.1.4-tauri-win-x64.exe"
+        )));
+        assert!(!supports_self_update(None));
     }
 }

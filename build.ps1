@@ -8,6 +8,12 @@ $appName = "FloatingClock"
 if ($version -ne $tauriVersion -or $version -ne $cargoVersion) {
     throw "Version mismatch: package.json=$version, tauri.conf.json=$tauriVersion, Cargo.toml=$cargoVersion"
 }
+if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+    throw "TAURI_SIGNING_PRIVATE_KEY must point to the updater private key"
+}
+if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) {
+    throw "TAURI_SIGNING_PRIVATE_KEY_PASSWORD is required"
+}
 
 Write-Host "Building with Tauri..." -ForegroundColor Cyan
 Push-Location $root
@@ -26,12 +32,18 @@ if (-not (Test-Path -LiteralPath $distPath)) {
 }
 
 $nsisSource = Join-Path $root "src-tauri\target\release\bundle\nsis\${appName}_${version}_x64-setup.exe"
+$signatureSource = "$nsisSource.sig"
 $nsisDest = Join-Path $distPath "${appName}-${version}-tauri-win-x64-setup.exe"
+$signatureDest = "$nsisDest.sig"
 
 if (-not (Test-Path -LiteralPath $nsisSource)) {
     throw "NSIS installer not found at $nsisSource"
 }
+if (-not (Test-Path -LiteralPath $signatureSource)) {
+    throw "Updater signature not found at $signatureSource"
+}
 Copy-Item -LiteralPath $nsisSource -Destination $nsisDest -Force
+Copy-Item -LiteralPath $signatureSource -Destination $signatureDest -Force
 
 $portableSource = Join-Path $root "src-tauri\target\release\floating-clock.exe"
 $portableDest = Join-Path $distPath "${appName}-${version}-tauri-win-x64.exe"
@@ -40,5 +52,19 @@ if (-not (Test-Path -LiteralPath $portableSource)) {
     throw "Portable executable not found at $portableSource"
 }
 Copy-Item -LiteralPath $portableSource -Destination $portableDest -Force
+
+$releaseUrl = "https://github.com/zionyang/floating-clock/releases/download/v$version/$([Uri]::EscapeDataString((Split-Path -Leaf $nsisDest)))"
+$latest = [ordered]@{
+    version = $version
+    notes = "See the GitHub release notes."
+    pub_date = (Get-Date).ToUniversalTime().ToString("o")
+    platforms = [ordered]@{
+        "windows-x86_64" = [ordered]@{
+            url = $releaseUrl
+            signature = (Get-Content -LiteralPath $signatureSource -Raw).Trim()
+        }
+    }
+}
+$latest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $distPath "latest.json") -Encoding utf8
 
 Write-Host "Build complete!" -ForegroundColor Cyan
