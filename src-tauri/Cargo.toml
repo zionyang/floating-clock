@@ -1,6 +1,6 @@
 [package]
 name = "floating-clock"
-version = "0.1.4"
+version = "0.1.5"
 description = "A compact Windows floating clock"
 authors = ["Zion"]
 license = "MIT"
