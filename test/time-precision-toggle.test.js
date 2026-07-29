@@ -28,7 +28,7 @@ test("standard time values show a precision-switch tooltip while unavailable pre
   assert.doesNotMatch(html, /id="countdownValue"[^>]*title=/);
   assert.match(html, /<p id="miniValue" class="mini-value">/);
   assert.match(css, /\.statusbar-detail\s*\{[\s\S]*?grid-template-columns:\s*max-content minmax\(0, 1fr\)/);
-  assert.match(css, /\.statusbar \.precision-notice\s*\{[\s\S]*?color:\s*#ff6f61[\s\S]*?text-align:\s*right/);
+  assert.match(css, /\.statusbar \.precision-notice\s*\{[\s\S]*?color:\s*var\(--color-critical\)[\s\S]*?text-align:\s*right/);
   assert.match(css, /\.statusbar p\s*\{[^}]*white-space:\s*nowrap/);
   assert.doesNotMatch(css, /\.statusbar p\s*\{[^}]*text-overflow:\s*ellipsis/);
   assert.doesNotMatch(css, /\.statusbar p\s*\{[^}]*overflow-wrap:\s*anywhere/);
