@@ -9,23 +9,29 @@
   <body>
     <main id="clockShell" class="clock-shell">
       <header class="titlebar" data-tauri-drag-region="deep">
-        <button id="miniModeButton" class="titlebar-action" type="button" title="进入 Mini 模式" aria-label="进入 Mini 模式" data-tauri-drag-region="false">
-          <svg class="lucide-icon window-mode-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <rect x="3" y="5" width="18" height="14" rx="2" />
-            <path d="M7 12h10" />
-          </svg>
-        </button>
-        <span class="titlebar-drag-surface" data-tauri-drag-region="deep">
-          <span class="time-precision-tooltip presentation-switch-tooltip" role="tooltip">双击切换显示</span>
-        </span>
-        <span class="title-name">悬浮时钟</span>
-        <div class="window-actions" data-tauri-drag-region="false">
+        <div class="titlebar-left-actions" data-tauri-drag-region="false">
+          <button id="miniModeButton" class="titlebar-action" type="button" title="进入 Mini 模式" aria-label="进入 Mini 模式">
+            <svg class="lucide-icon window-mode-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <path d="M7 12h10" />
+            </svg>
+          </button>
           <button id="topmostButton" class="titlebar-action" type="button" title="取消窗口置顶" aria-label="取消窗口置顶">
             <svg class="pin-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6Z" />
               <path d="M12 14v7" />
             </svg>
           </button>
+        </div>
+        <span class="titlebar-drag-surface" data-tauri-drag-region="deep">
+          <span class="time-precision-tooltip presentation-switch-tooltip" role="tooltip">双击切换显示</span>
+        </span>
+        <span id="titleName" class="title-name">
+          <span id="titleSubtitle" class="title-subtitle">AMBER</span>
+          <span id="titleMain" class="title-main">悬浮时钟</span>
+          <span id="titleBadge" class="title-theme-badge">🌙</span>
+        </span>
+        <div class="window-actions" data-tauri-drag-region="false">
           <button id="minimizeButton" class="titlebar-action" type="button" title="隐藏到托盘" aria-label="隐藏到托盘">
             <svg class="lucide-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path d="M5 12h14" />
@@ -90,6 +96,16 @@
           <p id="precisionNotice" class="precision-notice" role="status" hidden></p>
         </div>
       </footer>
+
+      <details id="themeMenu" class="theme-menu">
+        <summary id="themeSelect" class="theme-select" title="切换主题" aria-label="切换主题">🎨</summary>
+        <div id="themeOptions" class="theme-options" aria-label="主题">
+          <button class="theme-option" type="button" data-theme="amber">琥珀暗</button>
+          <button class="theme-option" type="button" data-theme="light">晨雾浅</button>
+          <button class="theme-option" type="button" data-theme="black">墨玉黑</button>
+          <button class="theme-option" type="button" data-theme="sakura">樱粉</button>
+        </div>
+      </details>
 
       <section class="mini-panel" aria-label="Mini 模式时间">
         <p id="miniSource" class="mini-source">加载时间源…</p>
