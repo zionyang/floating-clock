@@ -48,9 +48,9 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /\.clock-shell\.mini\s*\{\s*display:\s*block;\s*padding:\s*10px 12px;\s*cursor:\s*grab;/);
   assert.match(css, /\.clock-shell\.mini > :not\(\.mini-panel\):not\(\.mini-actions\)/);
   assert.match(css, /\.clock-shell\.mini \.mini-panel\s*\{[\s\S]*?grid-template-rows:\s*12px 40px 12px[\s\S]*?gap:\s*3px[\s\S]*?align-items:\s*center/);
-  assert.match(css, /\.mini-source\s*\{[\s\S]*?color:\s*rgba\(255, 225, 161, 0\.96\)[\s\S]*?font-size:\s*11px/);
+  assert.match(css, /\.mini-source\s*\{[\s\S]*?color:\s*var\(--color-mini-source\)[\s\S]*?font-size:\s*11px/);
   assert.match(css, /\.mini-value\s*\{[\s\S]*?font-size:\s*40px[\s\S]*?transform:\s*translateY\(-2px\)/);
-  assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(255, 255, 255, 0\.64\)[\s\S]*?font-size:\s*12px/);
+  assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(var\(--color-overlay-rgb\), 0\.64\)[\s\S]*?font-size:\s*12px/);
   assert.match(css, /\.clock-shell\.mini:hover \.mini-actions/);
   assert.match(css, /\.titlebar-drag-surface\s*\{[\s\S]*?right:\s*108px[\s\S]*?left:\s*48px/);
   assert.match(css, /\.titlebar-drag-surface \.presentation-switch-tooltip\s*\{[\s\S]*?left:\s*calc\(50% \+ 30px\)/);
@@ -59,8 +59,8 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /\.mini-actions\s*\{[\s\S]*?top:\s*50%[\s\S]*?right:\s*0[\s\S]*?flex-direction:\s*column/);
   assert.match(css, /\.mini-actions\s*\{[\s\S]*?transform:\s*translate\(4px, -50%\)/);
   assert.match(css, /\.mini-action\s*\{[\s\S]*?width:\s*20px[\s\S]*?height:\s*20px/);
-  assert.match(css, /\.mini-action:first-child\s*\{\s*border-radius:\s*4px 0 0 0;/);
-  assert.match(css, /\.mini-action:last-child\s*\{\s*border-radius:\s*0 0 0 4px;/);
+  assert.match(css, /\.mini-action:first-child\s*\{\s*border-radius:\s*var\(--radius-mini-action\) 0 0 0;/);
+  assert.match(css, /\.mini-action:last-child\s*\{\s*border-radius:\s*0 0 0 var\(--radius-mini-action\);/);
   assert.doesNotMatch(css, /mini-close-action/);
   assert.doesNotMatch(css, /-webkit-app-region/);
   assert.match(css, /\.mini-action\s*\{[\s\S]*?background:\s*transparent/);

@@ -13,7 +13,7 @@ test("uses a custom dark time-source menu instead of a native select", () => {
   assert.match(html, /<details id="sourceMenu" class="source-menu">/);
   assert.match(html, /<div id="sourceOptions" class="source-options"><\/div>/);
   assert.doesNotMatch(html, /<select id="sourceSelect"/);
-  assert.match(css, /\.source-options\s*\{[\s\S]*?background:\s*#1b2023/);
+  assert.match(css, /\.source-options\s*\{[\s\S]*?background:\s*var\(--color-raised\)/);
   assert.match(css, /\.source-menu:not\(\[open\]\) \.source-options\s*\{\s*display:\s*none/);
   assert.match(css, /:where\(button, input, summary\):focus-visible/);
   assert.match(app, /function selectSource\(sourceId\)/);
