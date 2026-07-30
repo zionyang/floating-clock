@@ -9,6 +9,7 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   const html = fs.readFileSync(rendererPath("index.html"), "utf8");
   const css = fs.readFileSync(rendererPath("styles.css"), "utf8");
   const app = fs.readFileSync(rendererPath("app.js"), "utf8");
+  const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "lib.rs"), "utf8");
   const capability = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "capabilities", "default.json"), "utf8");
 
   assert.match(html, /<main id="clockShell" class="clock-shell">/);
@@ -67,6 +68,7 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /\.mini-action\s*\{[\s\S]*?background:\s*transparent/);
   assert.match(css, /\.mini-value\s*\{[\s\S]*?font-variant-numeric:\s*tabular-nums/);
   assert.match(app, /state\.presentation = mini \? "mini" : "standard"/);
+  assert.match(rust, /set_skip_taskbar\(mini\)/);
   assert.match(app, /elements\.clockShell\.setAttribute\("data-tauri-drag-region", mini \? "deep" : "false"\)/);
   assert.match(app, /elements\.miniSource\.textContent = selectedSource\?\.label \|\| "时间源"/);
   assert.match(app, /const displayDate = formatDisplayDate\(sourceNow\);/);

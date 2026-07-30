@@ -307,6 +307,9 @@ fn apply_presentation(
         .set_always_on_top(effective_topmost)
         .map_err(|error| error.to_string())?;
     window
+        .set_skip_taskbar(mini)
+        .map_err(|error| error.to_string())?;
+    window
         .set_size(LogicalSize::new(width, height))
         .map_err(|error| error.to_string())?;
 
