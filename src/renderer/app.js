@@ -46,6 +46,10 @@ const {
   getNextHour,
   isFutureTarget,
 } = window.countdownCore;
+const {
+  formatTimePrecision: formatTimeValue,
+  getDisplayPrecision,
+} = window.timeCore;
 
 const CRITICAL_WINDOW_MS = 5000;
 const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
@@ -75,7 +79,6 @@ const state = {
   showMilliseconds: true,
   sourcePrecision: "unknown",
   sourceSupportsMilliseconds: null,
-  timePrecisionUserChosen: false,
   topmost: true,
   miniResizeFrame: null,
   miniValueLength: null,
@@ -220,13 +223,16 @@ async function syncSelectedSource() {
 
   try {
     const syncResult = await window.floatingClock.syncSource(state.sourceId);
+    const hadValidOffset = state.hasValidOffset;
     state.offsetMs = syncResult.offsetMs;
     state.offsetSourceId = syncResult.sourceId;
     state.sourcePrecision = syncResult.precision;
     state.sourceSupportsMilliseconds = syncResult.supportsMilliseconds;
-    if (!state.timePrecisionUserChosen) {
-      state.showMilliseconds = syncResult.precision === "millisecond";
-    }
+    state.showMilliseconds = getDisplayPrecision(
+      state.showMilliseconds,
+      hadValidOffset,
+      syncResult.precision,
+    );
     state.precisionNotice = getPrecisionNotice(syncResult);
     state.hasValidOffset = true;
     updateTimePrecisionControls();
@@ -275,7 +281,6 @@ async function selectSource(sourceId) {
   state.sourceId = sourceId;
   state.sourcePrecision = "unknown";
   state.sourceSupportsMilliseconds = null;
-  state.timePrecisionUserChosen = false;
   state.precisionNotice = "";
   updateTimePrecisionControls();
   updatePrecisionNotice();
@@ -359,7 +364,6 @@ function toggleTimePrecision() {
   }
 
   state.showMilliseconds = !state.showMilliseconds;
-  state.timePrecisionUserChosen = true;
   updateTimePrecisionControls();
   render();
 }
@@ -580,7 +584,7 @@ function canToggleTimePrecision() {
 }
 
 function formatTimePrecision(value) {
-  return state.showMilliseconds && canToggleTimePrecision() ? value : value.replace(/\.\d{3}$/, "");
+  return formatTimeValue(value, state.showMilliseconds, state.hasValidOffset);
 }
 
 function formatDisplayDate(timestamp) {
