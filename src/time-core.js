@@ -143,10 +143,20 @@ function selectBestSample(samples) {
   return [...samples].sort((left, right) => left.roundTripMs - right.roundTripMs)[0];
 }
 
+function getDisplayPrecision(currentShowMilliseconds, hasValidOffset, syncPrecision) {
+  return hasValidOffset ? currentShowMilliseconds : syncPrecision === "millisecond";
+}
+
+function formatTimePrecision(value, showMilliseconds, hasValidOffset) {
+  return showMilliseconds && hasValidOffset ? value : value.replace(/\.\d{3}$/, "");
+}
+
 const timeCore = {
   buildDateBoundarySample,
   buildNtpSample,
   buildSample,
+  formatTimePrecision,
+  getDisplayPrecision,
   parseHttpDate,
   parseJdRequestId,
   parseMeituanBody,

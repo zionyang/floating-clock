@@ -37,15 +37,14 @@ test("standard time values show a precision-switch tooltip while unavailable pre
   assert.match(css, /\.time-value-toggle:hover \+ \.time-precision-tooltip,[\s\S]*?\.time-value-toggle:focus-visible \+ \.time-precision-tooltip/);
   assert.match(app, /sourcePrecision:\s*"unknown"/);
   assert.match(app, /sourceSupportsMilliseconds:\s*null/);
-  assert.match(app, /timePrecisionUserChosen:\s*false/);
   assert.match(app, /precisionNotice:\s*""/);
   assert.match(app, /showMilliseconds:\s*true/);
   assert.match(app, /elements\.clockValue\.addEventListener\("click", toggleTimePrecision\)/);
   assert.match(app, /elements\.countdownValue\.addEventListener\("click", toggleTimePrecision\)/);
-  assert.match(app, /if \(!state\.timePrecisionUserChosen\) \{\s*state\.showMilliseconds = syncResult\.precision === "millisecond";/);
-  assert.match(app, /state\.timePrecisionUserChosen = true/);
+  assert.match(app, /const hadValidOffset = state\.hasValidOffset;/);
+  assert.match(app, /state\.showMilliseconds = getDisplayPrecision\(/);
   assert.match(app, /function canToggleTimePrecision\(\) \{\s*return state\.hasValidOffset && state\.sourcePrecision !== "unknown";/);
-  assert.match(app, /function formatTimePrecision\(value\) \{\s*return state\.showMilliseconds && canToggleTimePrecision\(\) \? value : value\.replace\(/);
+  assert.match(app, /function formatTimePrecision\(value\) \{\s*return formatTimeValue\(value, state\.showMilliseconds, state\.hasValidOffset\);/);
   assert.match(app, /if \(!canToggleTimePrecision\(\)\) \{\s*return;/);
   assert.match(app, /elements\.precisionNotice/);
   assert.match(app, /elements\.clockPrecisionTooltip/);

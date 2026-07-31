@@ -4,6 +4,8 @@ const {
   buildDateBoundarySample,
   buildNtpSample,
   buildSample,
+  formatTimePrecision,
+  getDisplayPrecision,
   parseHttpDate,
   parseJdRequestId,
   parseMeituanBody,
@@ -96,4 +98,24 @@ test("keeps the NTP command's local timing sample", () => {
 
   assert.equal(sample.offsetMs, 990);
   assert.equal(sample.uncertaintyMs, 10);
+});
+
+test("keeps the selected precision across a refresh for standard and Mini values", () => {
+  const value = "12:34:56.789";
+
+  for (const surface of ["standard", "Mini"]) {
+    assert.equal(
+      formatTimePrecision(value, getDisplayPrecision(false, true, "millisecond"), true),
+      "12:34:56",
+      `${surface} should keep seconds`,
+    );
+    assert.equal(
+      formatTimePrecision(value, getDisplayPrecision(true, true, "second"), true),
+      value,
+      `${surface} should keep milliseconds`,
+    );
+  }
+
+  assert.equal(formatTimePrecision(value, true, true), value);
+  assert.equal(formatTimePrecision(value, true, false), "12:34:56");
 });
