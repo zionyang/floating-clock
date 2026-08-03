@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="background" cx="50%" cy="44%" r="78%">
+      <stop offset="0" stop-color="#07130f"/>
+      <stop offset="1" stop-color="#010605"/>
+    </radialGradient>
+    <radialGradient id="jade-orb" cx="28%" cy="20%" r="78%">
+      <stop offset="0" stop-color="#dcffec"/>
+      <stop offset="0.18" stop-color="#a6f7d1"/>
+      <stop offset="0.57" stop-color="#58c7a2"/>
+      <stop offset="1" stop-color="#19795f"/>
+    </radialGradient>
+    <filter id="orb-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#background)"/>
+
+  <g fill="#58c7a2">
+    <rect x="160" y="225" width="54" height="575"/>
+    <rect x="244" y="225" width="606" height="30"/>
+    <rect x="820" y="225" width="30" height="168"/>
+    <rect x="244" y="770" width="606" height="30"/>
+    <rect x="820" y="632" width="30" height="168"/>
+  </g>
+
+  <rect x="338" y="493" width="248" height="38" fill="#eef7f3"/>
+
+  <circle cx="750" cy="512" r="84" fill="#58c7a2" opacity="0.22" filter="url(#orb-glow)"/>
+  <circle cx="750" cy="512" r="70" fill="url(#jade-orb)"/>
+  <ellipse cx="728" cy="486" rx="26" ry="18" fill="#effff7" opacity="0.24"/>
+</svg>

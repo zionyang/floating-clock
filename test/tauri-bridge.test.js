@@ -40,6 +40,36 @@ test("Tauri bridge reuses the browser time-source pipeline", async () => {
   assert.equal(calls.at(-1).command, "quit");
 });
 
+test("local time is listed without entering the calibration pipeline", async () => {
+  const calls = [];
+  const window = {
+    __TAURI__: {
+      core: {
+        invoke: async (...argumentsList) => {
+          calls.push(argumentsList);
+          throw new Error("Local time must not invoke Tauri.");
+        },
+      },
+      event: { listen: async () => () => {} },
+    },
+  };
+  const context = vm.createContext({ console, Date, JSON, Promise, window });
+
+  for (const file of ["time-core.js", "time-sources.js", "tauri-bridge.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "src", file), "utf8"), context);
+  }
+
+  const [localSource] = await window.floatingClock.getSources();
+  assert.equal(localSource.id, "local");
+  assert.equal(localSource.label, "本机时间");
+  assert.equal(localSource.kind, "local");
+  await assert.rejects(
+    window.floatingClock.syncSource("local"),
+    /does not require synchronization/,
+  );
+  assert.equal(calls.length, 0);
+});
+
 test("Tauri bridge exposes the fixed NTP command for Beijing time", async () => {
   const calls = [];
   const window = {
@@ -222,7 +252,7 @@ test("Beijing keeps millisecond display after any valid NTP response", async () 
   assert.equal(result.precisionLabel, "毫秒级");
 });
 
-test("listed sources report their actual precision and include Damai", async () => {
+test("visible sources follow the product order and platform aliases keep their precision", async () => {
   const baseDate = Math.floor(Date.now() / 1000) * 1000;
   const phaseCalls = new Map();
   const window = {
@@ -285,12 +315,13 @@ test("listed sources report their actual precision and include Damai", async () 
 
   assert.deepEqual(
     Array.from((await window.floatingClock.getSources()).map(({ id }) => id)),
-    ["beijing", "jd", "pinduoduo", "taobao", "meituan", "meituan-flash", "taobao-flash", "damai"],
+    ["local", "beijing", "jd", "jd-seconds", "meituan", "meituan-flash", "taobao", "taobao-flash", "damai", "pinduoduo"],
   );
 
   const expectedPrecision = {
     beijing: "millisecond",
     jd: "millisecond",
+    "jd-seconds": "millisecond",
     pinduoduo: "millisecond",
     taobao: "millisecond",
     meituan: "millisecond",
@@ -299,9 +330,15 @@ test("listed sources report their actual precision and include Damai", async () 
     damai: "millisecond",
   };
 
+  const results = {};
   for (const [sourceId, precision] of Object.entries(expectedPrecision)) {
     const result = await window.floatingClock.syncSource(sourceId);
+    results[sourceId] = result;
     assert.equal(result.precision, precision);
     assert.ok(Number.isFinite(result.offsetMs));
   }
+
+  assert.equal(results["jd-seconds"].sourceId, "jd-seconds");
+  assert.equal(results["jd-seconds"].sourceLabel, "京东秒送时间");
+  assert.equal(results["jd-seconds"].strategyId, "jd-request-id");
 });

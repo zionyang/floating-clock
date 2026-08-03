@@ -16,11 +16,30 @@ const PHASE_PROBE_COUNT = 14;
 const PHASE_PROBE_DELAY_MS = 80;
 const MAX_MILLISECOND_UNCERTAINTY_MS = 100;
 
+const PUBLIC_SOURCE_IDS = [
+  "local",
+  "beijing",
+  "jd",
+  "jd-seconds",
+  "meituan",
+  "meituan-flash",
+  "taobao",
+  "taobao-flash",
+  "damai",
+  "pinduoduo",
+];
+
 const sources = {
+  local: {
+    id: "local",
+    label: "本机时间",
+    description: "显示当前系统时间",
+    kind: "local",
+  },
   beijing: {
     id: "beijing",
     label: "北京时间",
-    description: "国家授时中心 NTP",
+    description: "用于通用倒计时",
     strategies: [
       {
         id: "ntsc-ntp",
@@ -34,7 +53,7 @@ const sources = {
   jd: {
     id: "jd",
     label: "京东时间",
-    description: "京东 API 毫秒时间戳",
+    description: "用于京东活动",
     strategies: [
       {
         id: "jd-request-id",
@@ -56,10 +75,16 @@ const sources = {
       },
     ],
   },
+  "jd-seconds": {
+    id: "jd-seconds",
+    label: "京东秒送时间",
+    description: "用于京东秒送活动",
+    calibrationSourceId: "jd",
+  },
   pinduoduo: {
     id: "pinduoduo",
     label: "拼多多时间",
-    description: "拼多多服务器时间",
+    description: "用于拼多多活动",
     strategies: [
       {
         id: "pdd-server-time",
@@ -93,7 +118,7 @@ const sources = {
   taobao: {
     id: "taobao",
     label: "淘宝时间",
-    description: "淘宝 H5 时间戳",
+    description: "用于淘宝活动",
     strategies: [
       {
         id: "taobao-timestamp",
@@ -118,7 +143,7 @@ const sources = {
   meituan: {
     id: "meituan",
     label: "美团时间",
-    description: "美团服务器毫秒时间",
+    description: "用于美团活动",
     strategies: [
       {
         id: "meituan-server-time",
@@ -143,7 +168,7 @@ const sources = {
   "meituan-flash": {
     id: "meituan-flash",
     label: "美团闪购时间",
-    description: "与美团共用毫秒时基",
+    description: "用于美团闪购活动",
     strategies: [
       {
         id: "meituan-flash-server-time",
@@ -168,7 +193,7 @@ const sources = {
   "taobao-flash": {
     id: "taobao-flash",
     label: "淘宝闪购时间",
-    description: "饿了么网关毫秒时间戳",
+    description: "用于淘宝闪购活动",
     strategies: [
       {
         id: "taobao-flash-timestamp",
@@ -193,7 +218,7 @@ const sources = {
   damai: {
     id: "damai",
     label: "大麦时间",
-    description: "大麦网关毫秒时间戳",
+    description: "用于大麦活动",
     strategies: [
       {
         id: "damai-timestamp",
@@ -218,23 +243,30 @@ const sources = {
 };
 
 function getPublicSources() {
-  return Object.values(sources).map(({ id, label, description }) => ({
-    id,
-    label,
-    description,
-  }));
+  return PUBLIC_SOURCE_IDS.map((id) => {
+    const { label, description, kind = "calibrated" } = sources[id];
+    return { id, label, description, kind };
+  });
 }
 
 async function synchronizeSource(sourceId) {
-  const source = sources[sourceId];
+  const selectedSource = sources[sourceId];
 
-  if (!source) {
+  if (!selectedSource) {
     throw new Error(`Unknown time source: ${sourceId}`);
   }
 
+  if (selectedSource.kind === "local") {
+    throw new Error("Local time does not require synchronization.");
+  }
+
+  const calibrationSource = sources[
+    selectedSource.calibrationSourceId || selectedSource.id
+  ];
+
   const failures = [];
 
-  for (const strategy of source.strategies) {
+  for (const strategy of calibrationSource.strategies) {
     const samples = [];
     const sampleCount = strategy.type === "date-boundary" ? 1 : SAMPLE_COUNT;
 
@@ -249,14 +281,16 @@ async function synchronizeSource(sourceId) {
     if (samples.length) {
       const sample = selectBestSample(samples);
       return {
-        sourceId: source.id,
-        sourceLabel: source.label,
+        sourceId: selectedSource.id,
+        sourceLabel: selectedSource.label,
         ...toDisplayPrecision(sample),
       };
     }
   }
 
-  throw new Error(failures.at(-1) || `${source.label} synchronization failed.`);
+  throw new Error(
+    failures.at(-1) || `${selectedSource.label} synchronization failed.`,
+  );
 }
 
 function toDisplayPrecision(sample) {

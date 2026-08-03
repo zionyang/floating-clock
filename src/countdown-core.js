@@ -6,6 +6,13 @@
     return Math.floor(epochMs / HOUR_MS) * HOUR_MS + HOUR_MS;
   }
 
+  function getNextLocalHour(epochMs) {
+    const next = new Date(epochMs);
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+    return next.getTime();
+  }
+
   function getNextBeijingTargetAtTime(epochMs, time) {
     const [hour, minute] = time.split(":").map(Number);
     const current = getBeijingDateParts(epochMs);
@@ -20,6 +27,26 @@
     );
 
     return targetEpochMs > epochMs ? targetEpochMs : targetEpochMs + DAY_MS;
+  }
+
+  function getNextLocalTargetAtTime(epochMs, time) {
+    const [hour, minute] = time.split(":").map(Number);
+    const current = new Date(epochMs);
+    const target = new Date(
+      current.getFullYear(),
+      current.getMonth(),
+      current.getDate(),
+      hour,
+      minute,
+      0,
+      0,
+    );
+
+    if (target.getTime() <= epochMs) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    return target.getTime();
   }
 
   function isFutureTarget(targetEpochMs, sourceNowEpochMs) {
@@ -44,6 +71,8 @@
 
   const countdownCore = {
     getNextBeijingTargetAtTime,
+    getNextLocalHour,
+    getNextLocalTargetAtTime,
     getNextHour,
     isFutureTarget,
   };
