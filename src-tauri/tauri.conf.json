@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "FloatingClock",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "identifier": "com.zion.floatingclock",
   "build": {
     "frontendDist": "../src",
@@ -52,6 +52,10 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper",
         "silent": true
+      },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
       }
     }
   }

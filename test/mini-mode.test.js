@@ -74,7 +74,7 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(app, /const displayDate = formatDisplayDate\(sourceNow\);/);
   assert.match(app, /elements\.dateValue\.textContent = displayDate;/);
   assert.match(app, /elements\.miniDate\.textContent = displayDate;/);
-  assert.match(app, /function formatDisplayDate\(timestamp\) \{[\s\S]*?dateFormatter\.formatToParts\(timestamp\)[\s\S]*?`\$\{date\} \$\{weekday\}`/);
+  assert.match(app, /function formatDisplayDate\(timestamp\) \{[\s\S]*?if \(isLocalTimeSource\(\)\)[\s\S]*?LOCAL_WEEKDAYS\[value\.getDay\(\)\][\s\S]*?beijingDateFormatter\.formatToParts\(timestamp\)[\s\S]*?`\$\{date\} \$\{weekday\}`/);
   assert.match(capability, /"core:window:allow-start-dragging"/);
   assert.match(app, /setWindowPresentation\(true, nextWidth\)/);
   assert.match(app, /elements\.titlebar\.addEventListener\("mousedown", \(event\) => \{/);

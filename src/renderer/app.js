@@ -20,17 +20,17 @@ const elements = {
   miniRestoreButton: document.querySelector("#miniRestoreButton"),
   miniSource: document.querySelector("#miniSource"),
   miniValue: document.querySelector("#miniValue"),
-  offsetStatus: document.querySelector("#offsetStatus"),
-  precisionNotice: document.querySelector("#precisionNotice"),
   sourceMenu: document.querySelector("#sourceMenu"),
   sourceOptions: document.querySelector("#sourceOptions"),
   sourceSelect: document.querySelector("#sourceSelect"),
   sourceSelectValue: document.querySelector("#sourceSelectValue"),
+  sourceSwitchDialog: document.querySelector("#sourceSwitchDialog"),
   startCountdownButton: document.querySelector("#startCountdownButton"),
   stopCountdownButton: document.querySelector("#stopCountdownButton"),
   syncButton: document.querySelector("#syncButton"),
   syncStatus: document.querySelector("#syncStatus"),
   targetInput: document.querySelector("#targetInput"),
+  targetTimeZoneLabel: document.querySelector("#targetTimeZoneLabel"),
   themeMenu: document.querySelector("#themeMenu"),
   themeOptions: document.querySelector("#themeOptions"),
   themeSelect: document.querySelector("#themeSelect"),
@@ -43,6 +43,8 @@ const elements = {
 };
 const {
   getNextBeijingTargetAtTime,
+  getNextLocalHour,
+  getNextLocalTargetAtTime,
   getNextHour,
   isFutureTarget,
 } = window.countdownCore;
@@ -55,6 +57,7 @@ const CRITICAL_WINDOW_MS = 5000;
 const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
 const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
+const LOCAL_WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const THEME_TITLES = {
   amber: { title: "悬浮时钟", badge: "🌙", subtitle: "AMBER" },
   light: { title: "悬浮时钟", badge: "☀️", subtitle: "MIST" },
@@ -75,7 +78,6 @@ const state = {
   offsetMs: 0,
   offsetSourceId: null,
   presentation: "standard",
-  precisionNotice: "",
   showMilliseconds: true,
   sourcePrecision: "unknown",
   sourceSupportsMilliseconds: null,
@@ -85,18 +87,21 @@ const state = {
   miniWidth: MINI_WINDOW_MIN_WIDTH,
   sourceId: readStoredSourceId(),
   sources: [],
+  syncDetails: null,
+  syncStatusText: "准备校准",
   syncTimer: null,
+  showSyncDetails: false,
   theme: readStoredTheme(),
 };
 
-const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
+const beijingDateFormatter = new Intl.DateTimeFormat("zh-CN", {
   timeZone: "Asia/Shanghai",
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
   weekday: "short",
 });
-const timeFormatter = new Intl.DateTimeFormat("en-GB", {
+const beijingTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Shanghai",
   hourCycle: "h23",
   hour: "2-digit",
@@ -110,8 +115,6 @@ bootstrap();
 async function bootstrap() {
   bindEvents();
   updateTimePrecisionControls();
-  updatePrecisionNotice();
-  setDefaultCountdownTarget();
   const controls = await window.floatingClock.getWindowControls();
   updateWindowControls(controls);
   applyPresentation(Boolean(controls.mini));
@@ -134,14 +137,16 @@ async function bootstrap() {
 
   if (!state.sources.some(({ id }) => id === state.sourceId)) {
     state.sourceId = "beijing";
+    localStorage.setItem(STORAGE_KEYS.sourceId, state.sourceId);
   }
 
   updateSourceSelect();
+  setDefaultCountdownTarget();
   setMode(state.mode);
   await syncSelectedSource();
+  refreshAutoSyncTimer();
   render();
   window.setInterval(render, 16);
-  state.syncTimer = window.setInterval(syncSelectedSource, AUTO_SYNC_INTERVAL_MS);
 }
 
 function bindEvents() {
@@ -150,6 +155,7 @@ function bindEvents() {
   elements.minimizeButton.addEventListener("click", () => window.floatingClock.minimize());
   elements.clockValue.addEventListener("click", toggleTimePrecision);
   elements.countdownValue.addEventListener("click", toggleTimePrecision);
+  elements.syncStatus.addEventListener("click", toggleSyncDetails);
   elements.titlebar.addEventListener("mousedown", (event) => {
     if (
       event.button !== 0
@@ -186,6 +192,12 @@ function bindEvents() {
       return;
     }
 
+    if (elements.sourceSwitchDialog.open) {
+      event.preventDefault();
+      elements.sourceSwitchDialog.close("cancel");
+      return;
+    }
+
     if (
       state.presentation === "standard"
       && (elements.sourceMenu.open || elements.themeMenu.open)
@@ -218,11 +230,21 @@ function bindEvents() {
 }
 
 async function syncSelectedSource() {
+  if (isLocalTimeSource()) {
+    applyLocalTime();
+    return;
+  }
+
+  const sourceId = state.sourceId;
   elements.syncButton.disabled = true;
-  elements.syncStatus.textContent = "校准中...";
+  setSyncStatus("同步中...", null);
 
   try {
-    const syncResult = await window.floatingClock.syncSource(state.sourceId);
+    const syncResult = await window.floatingClock.syncSource(sourceId);
+    if (sourceId !== state.sourceId) {
+      return;
+    }
+
     const hadValidOffset = state.hasValidOffset;
     state.offsetMs = syncResult.offsetMs;
     state.offsetSourceId = syncResult.sourceId;
@@ -233,40 +255,42 @@ async function syncSelectedSource() {
       hadValidOffset,
       syncResult.precision,
     );
-    state.precisionNotice = getPrecisionNotice(syncResult);
     state.hasValidOffset = true;
     updateTimePrecisionControls();
-    updatePrecisionNotice();
     updateTargetInputMinimum();
-    const quality = syncResult.calibrationWindowMs === undefined
-      ? `RTT ${syncResult.roundTripMs} ms`
-      : `校准窗 ${syncResult.calibrationWindowMs} ms`;
-    elements.syncStatus.textContent = `${syncResult.sourceLabel} · ${syncResult.strategyLabel} · ${quality}`;
-    elements.offsetStatus.textContent =
-      `${syncResult.precisionLabel} · 误差 ±${syncResult.uncertaintyMs} ms · 偏移 ${formatSignedMs(syncResult.offsetMs)}`;
+    setSyncStatus(getSyncStatus(syncResult), {
+      sourceLabel: syncResult.sourceLabel,
+      strategyLabel: syncResult.strategyLabel,
+      roundTripMs: syncResult.roundTripMs,
+      calibrationWindowMs: syncResult.calibrationWindowMs,
+      precisionLabel: syncResult.precisionLabel,
+      uncertaintyMs: syncResult.uncertaintyMs,
+      offsetMs: syncResult.offsetMs,
+    });
   } catch (error) {
-    const sourceLabel = getSelectedSource()?.label || "时间源";
-    elements.syncStatus.textContent = `${sourceLabel}校准失败`;
+    if (sourceId !== state.sourceId) {
+      return;
+    }
 
+    const sourceLabel = getSelectedSource()?.label || "时间源";
     if (state.hasValidOffset && state.offsetSourceId === state.sourceId) {
-      elements.offsetStatus.textContent = `保留偏移 ${formatSignedMs(state.offsetMs)}`;
-      state.precisionNotice = `${sourceLabel}校准失败，沿用上次校准`;
+      setSyncStatus(`${sourceLabel} · 校准失败，沿用上次结果`);
     } else {
       state.offsetMs = 0;
       state.offsetSourceId = null;
       state.hasValidOffset = false;
       state.sourcePrecision = "unknown";
       state.sourceSupportsMilliseconds = null;
-      elements.offsetStatus.textContent = "暂用本机时间";
-      state.precisionNotice = `${sourceLabel}校准失败，暂用本机时间`;
+      setSyncStatus(`${sourceLabel} · 校准失败，暂用本机时间`, null);
     }
 
     updateTimePrecisionControls();
-    updatePrecisionNotice();
 
     console.error(error);
   } finally {
-    elements.syncButton.disabled = false;
+    if (sourceId === state.sourceId) {
+      updateSyncControls();
+    }
   }
 }
 
@@ -278,19 +302,69 @@ async function selectSource(sourceId) {
     return;
   }
 
+  if (
+    state.countdownTargetEpochMs !== null
+    && !(await confirmSourceSwitch())
+  ) {
+    return;
+  }
+
+  resetCountdownForSourceSwitch();
   state.sourceId = sourceId;
   state.sourcePrecision = "unknown";
   state.sourceSupportsMilliseconds = null;
-  state.precisionNotice = "";
   updateTimePrecisionControls();
-  updatePrecisionNotice();
   localStorage.setItem(STORAGE_KEYS.sourceId, state.sourceId);
   updateSourceSelect();
+  refreshAutoSyncTimer();
   await syncSelectedSource();
+}
+
+function applyLocalTime() {
+  state.offsetMs = 0;
+  state.offsetSourceId = null;
+  state.hasValidOffset = false;
+  state.sourcePrecision = "millisecond";
+  state.sourceSupportsMilliseconds = true;
+  setSyncStatus("本机时间 · 未校准", null);
+  updateTimePrecisionControls();
+  updateTargetInputMinimum();
+  updateSyncControls();
+}
+
+function refreshAutoSyncTimer() {
+  if (state.syncTimer !== null) {
+    window.clearInterval(state.syncTimer);
+    state.syncTimer = null;
+  }
+
+  if (!isLocalTimeSource()) {
+    state.syncTimer = window.setInterval(syncSelectedSource, AUTO_SYNC_INTERVAL_MS);
+  }
+}
+
+function confirmSourceSwitch() {
+  return new Promise((resolve) => {
+    elements.sourceSwitchDialog.addEventListener(
+      "close",
+      () => resolve(elements.sourceSwitchDialog.returnValue === "confirm"),
+      { once: true },
+    );
+    elements.sourceSwitchDialog.showModal();
+  });
+}
+
+function resetCountdownForSourceSwitch() {
+  stopCountdown();
+  elements.targetInput.value = "";
 }
 
 function getSelectedSource() {
   return state.sources.find(({ id }) => id === state.sourceId);
+}
+
+function isLocalTimeSource() {
+  return getSelectedSource()?.kind === "local";
 }
 
 function updateSourceSelect() {
@@ -298,6 +372,10 @@ function updateSourceSelect() {
   elements.sourceSelectValue.textContent = selectedSource?.label || "时间源";
   elements.sourceSelect.title = selectedSource?.description || "";
   elements.miniSource.textContent = selectedSource?.label || "时间源";
+  elements.targetTimeZoneLabel.textContent = isLocalTimeSource()
+    ? "目标本机时间"
+    : "目标北京时间";
+  updateSyncControls();
 
   elements.sourceOptions.querySelectorAll(".source-option").forEach((option) => {
     const selected = option.dataset.sourceId === state.sourceId;
@@ -306,9 +384,16 @@ function updateSourceSelect() {
   });
 }
 
+function updateSyncControls() {
+  const localTime = isLocalTimeSource();
+  elements.syncButton.disabled = localTime;
+  elements.syncButton.title = localTime ? "本机时间无需校准" : "重新校准";
+  elements.syncButton.setAttribute("aria-label", elements.syncButton.title);
+}
+
 function render() {
   const sourceNow = Date.now() + state.offsetMs;
-  const clockParts = getBeijingTimeParts(sourceNow);
+  const clockParts = getClockTimeParts(sourceNow);
   const clockText = formatTimePrecision(
     `${clockParts.hour}:${clockParts.minute}:${clockParts.second}.${clockParts.millisecond}`,
   );
@@ -389,30 +474,61 @@ function updateTimePrecisionControls() {
   });
 }
 
-function getPrecisionNotice(syncResult) {
+function getSyncStatus(syncResult) {
   if (syncResult.precision === "millisecond") {
-    return "";
+    return `${syncResult.sourceLabel} · 已同步`;
   }
 
-  return syncResult.supportsMilliseconds
-    ? "毫秒校准失败"
-    : "非平台级严格毫秒";
+  return `${syncResult.sourceLabel} · ${syncResult.supportsMilliseconds
+    ? "已同步，精度不足"
+    : "已同步，已降级"}`;
 }
 
-function updatePrecisionNotice() {
-  elements.precisionNotice.hidden = !state.precisionNotice;
-  elements.precisionNotice.textContent = state.precisionNotice;
+function setSyncStatus(text, details = state.syncDetails) {
+  state.syncStatusText = text;
+  state.syncDetails = details;
+  state.showSyncDetails = false;
+  renderSyncStatus();
+}
+
+function toggleSyncDetails(event) {
+  if (event.detail !== 3) {
+    return;
+  }
+
+  event.preventDefault();
+  state.showSyncDetails = !state.showSyncDetails;
+  renderSyncStatus();
+}
+
+function renderSyncStatus() {
+  elements.syncStatus.textContent = state.showSyncDetails
+    ? formatSyncDetails(state.syncDetails)
+    : state.syncStatusText;
+  elements.syncStatus.classList.toggle("sync-status-details", state.showSyncDetails);
+}
+
+function formatSyncDetails(details) {
+  if (!details) {
+    return "暂无校时详情";
+  }
+
+  const quality = details.calibrationWindowMs === undefined
+    ? `RTT ${details.roundTripMs} ms`
+    : `校准窗 ${details.calibrationWindowMs} ms`;
+
+  return `${details.sourceLabel} · ${details.strategyLabel} · ${quality}\n${details.precisionLabel} · 误差 ±${details.uncertaintyMs} ms · 偏移 ${formatSignedMs(details.offsetMs)}`;
 }
 
 function setDefaultCountdownTarget() {
-  const nextHour = getNextHour(getSourceNow());
-  elements.targetInput.value = toBeijingInputValue(nextHour);
+  const nextHour = getNextTargetHour(getSourceNow());
+  elements.targetInput.value = toTargetInputValue(nextHour);
   updateTargetInputMinimum();
 }
 
 function startCountdown() {
   const sourceNow = getSourceNow();
-  const target = parseBeijingInput(elements.targetInput.value);
+  const target = parseTargetInput(elements.targetInput.value);
   if (!Number.isFinite(target)) {
     elements.countdownValue.textContent = "目标时间无效";
     return;
@@ -420,7 +536,7 @@ function startCountdown() {
 
   if (!isFutureTarget(target, sourceNow)) {
     elements.countdownValue.textContent = "请选择未来时间";
-    elements.targetInput.value = toBeijingInputValue(getNextHour(sourceNow));
+    elements.targetInput.value = toTargetInputValue(getNextTargetHour(sourceNow));
     updateTargetInputMinimum(sourceNow);
     return;
   }
@@ -497,8 +613,14 @@ function updateWindowControls(controls) {
   elements.topmostButton.setAttribute("aria-label", elements.topmostButton.title);
 }
 
+function getClockTimeParts(epochMs) {
+  return isLocalTimeSource()
+    ? getLocalTimeParts(epochMs)
+    : getBeijingTimeParts(epochMs);
+}
+
 function getBeijingTimeParts(epochMs) {
-  const parts = timeFormatter.formatToParts(epochMs);
+  const parts = beijingTimeFormatter.formatToParts(epochMs);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
 
   return {
@@ -509,14 +631,22 @@ function getBeijingTimeParts(epochMs) {
   };
 }
 
-function isClockCritical(epochMs) {
-  const nextHourDistanceMs = 3_600_000 - positiveModulo(epochMs, 3_600_000);
+function getLocalTimeParts(epochMs) {
+  const value = new Date(epochMs);
+  const pad = (number) => String(number).padStart(2, "0");
 
-  return nextHourDistanceMs <= CRITICAL_WINDOW_MS;
+  return {
+    hour: pad(value.getHours()),
+    minute: pad(value.getMinutes()),
+    second: pad(value.getSeconds()),
+    millisecond: String(value.getMilliseconds()).padStart(3, "0"),
+  };
 }
 
-function positiveModulo(value, divisor) {
-  return ((value % divisor) + divisor) % divisor;
+function isClockCritical(epochMs) {
+  const nextHourDistanceMs = getNextTargetHour(epochMs) - epochMs;
+
+  return nextHourDistanceMs <= CRITICAL_WINDOW_MS;
 }
 
 function setCriticalState(element, isCritical) {
@@ -526,11 +656,29 @@ function setCriticalState(element, isCritical) {
 function setQuickCountdownTarget(target) {
   const sourceNow = getSourceNow();
   const targetEpochMs = target === "next-hour"
-    ? getNextHour(sourceNow)
-    : getNextBeijingTargetAtTime(sourceNow, target);
+    ? getNextTargetHour(sourceNow)
+    : getNextTargetAtTime(sourceNow, target);
 
-  elements.targetInput.value = toBeijingInputValue(targetEpochMs);
+  elements.targetInput.value = toTargetInputValue(targetEpochMs);
   startCountdown();
+}
+
+function getNextTargetHour(epochMs) {
+  return isLocalTimeSource() ? getNextLocalHour(epochMs) : getNextHour(epochMs);
+}
+
+function getNextTargetAtTime(epochMs, time) {
+  return isLocalTimeSource()
+    ? getNextLocalTargetAtTime(epochMs, time)
+    : getNextBeijingTargetAtTime(epochMs, time);
+}
+
+function parseTargetInput(value) {
+  return isLocalTimeSource() ? parseLocalInput(value) : parseBeijingInput(value);
+}
+
+function toTargetInputValue(epochMs) {
+  return isLocalTimeSource() ? toLocalInputValue(epochMs) : toBeijingInputValue(epochMs);
 }
 
 function parseBeijingInput(value) {
@@ -554,6 +702,27 @@ function parseBeijingInput(value) {
   );
 }
 
+function parseLocalInput(value) {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/,
+  );
+
+  if (!match) {
+    return Number.NaN;
+  }
+
+  const [, year, month, day, hour, minute, second = "0", millisecond = "0"] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(millisecond.padEnd(3, "0")),
+  ).getTime();
+}
+
 function toBeijingInputValue(epochMs) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
@@ -571,8 +740,16 @@ function toBeijingInputValue(epochMs) {
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}.${millisecond}`;
 }
 
+function toLocalInputValue(epochMs) {
+  const value = new Date(epochMs);
+  const pad = (number) => String(number).padStart(2, "0");
+  const millisecond = String(value.getMilliseconds()).padStart(3, "0");
+
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}.${millisecond}`;
+}
+
 function updateTargetInputMinimum(epochMs = getSourceNow()) {
-  elements.targetInput.min = toBeijingInputValue(epochMs + 1);
+  elements.targetInput.min = toTargetInputValue(epochMs + 1);
 }
 
 function getSourceNow() {
@@ -580,15 +757,25 @@ function getSourceNow() {
 }
 
 function canToggleTimePrecision() {
-  return state.hasValidOffset && state.sourcePrecision !== "unknown";
+  return hasDisplayTimeBasis() && state.sourcePrecision !== "unknown";
 }
 
 function formatTimePrecision(value) {
-  return formatTimeValue(value, state.showMilliseconds, state.hasValidOffset);
+  return formatTimeValue(value, state.showMilliseconds, hasDisplayTimeBasis());
+}
+
+function hasDisplayTimeBasis() {
+  return isLocalTimeSource() || state.hasValidOffset;
 }
 
 function formatDisplayDate(timestamp) {
-  const parts = dateFormatter.formatToParts(timestamp);
+  if (isLocalTimeSource()) {
+    const value = new Date(timestamp);
+    const pad = (number) => String(number).padStart(2, "0");
+    return `${value.getFullYear()}/${pad(value.getMonth() + 1)}/${pad(value.getDate())} ${LOCAL_WEEKDAYS[value.getDay()]}`;
+  }
+
+  const parts = beijingDateFormatter.formatToParts(timestamp);
   const weekday = parts.find(({ type }) => type === "weekday")?.value || "";
   const date = parts
     .filter(({ type }) => type !== "weekday")

@@ -5,6 +5,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 const {
   getNextBeijingTargetAtTime,
+  getNextLocalHour,
+  getNextLocalTargetAtTime,
   getNextHour,
   isFutureTarget,
 } = require("../src/countdown-core");
@@ -25,6 +27,22 @@ test("keeps an upcoming Beijing quick target on the current day", () => {
     getNextBeijingTargetAtTime(sourceNow, "20:00"),
     Date.UTC(2026, 4, 22, 12, 0, 0),
   );
+});
+
+test("uses the system local calendar for local quick targets", () => {
+  const sourceNow = new Date(2026, 4, 22, 9, 30, 15, 250).getTime();
+  const nextHour = new Date(getNextLocalHour(sourceNow));
+  const nextTen = new Date(getNextLocalTargetAtTime(sourceNow, "10:00"));
+  const nextEight = new Date(getNextLocalTargetAtTime(sourceNow, "08:00"));
+
+  assert.equal(nextHour.getHours(), 10);
+  assert.equal(nextHour.getMinutes(), 0);
+  assert.equal(nextHour.getSeconds(), 0);
+  assert.equal(nextTen.getDate(), 22);
+  assert.equal(nextTen.getHours(), 10);
+  assert.equal(nextTen.getMinutes(), 0);
+  assert.equal(nextEight.getDate(), 23);
+  assert.equal(nextEight.getHours(), 8);
 });
 
 test("requires countdown targets to be later than source time", () => {

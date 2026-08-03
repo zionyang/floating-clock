@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "floating-clock"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "reqwest 0.12.28",
  "serde",

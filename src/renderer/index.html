@@ -75,7 +75,7 @@
             <span id="countdownPrecisionTooltip" class="time-precision-tooltip" role="tooltip" hidden>显示整秒</span>
         </div>
         <label class="target-row">
-          <span>目标北京时间</span>
+          <span id="targetTimeZoneLabel">目标北京时间</span>
           <input id="targetInput" type="datetime-local" step="0.001" />
         </label>
         <div class="quick-targets" aria-label="快捷倒计时目标">
@@ -91,11 +91,18 @@
 
       <footer class="statusbar">
         <p id="syncStatus">准备校准</p>
-        <div class="statusbar-detail">
-          <p id="offsetStatus">本机偏移 --</p>
-          <p id="precisionNotice" class="precision-notice" role="status" hidden></p>
-        </div>
       </footer>
+
+      <dialog id="sourceSwitchDialog" class="source-switch-dialog" aria-labelledby="sourceSwitchDialogTitle" aria-describedby="sourceSwitchDialogDescription">
+        <form method="dialog" class="source-switch-dialog-content">
+          <h2 id="sourceSwitchDialogTitle">切换时间源？</h2>
+          <p id="sourceSwitchDialogDescription">切换后将结束当前倒计时并清空目标时间，无法恢复。</p>
+          <div class="source-switch-dialog-actions">
+            <button type="submit" value="cancel">取消</button>
+            <button type="submit" value="confirm">继续切换</button>
+          </div>
+        </form>
+      </dialog>
 
       <details id="themeMenu" class="theme-menu">
         <summary id="themeSelect" class="theme-select" title="切换主题" aria-label="切换主题">🎨</summary>
