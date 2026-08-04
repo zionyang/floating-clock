@@ -25,6 +25,10 @@ test("uses a custom dark time-source menu instead of a native select", () => {
   assert.match(app, /state\.countdownTargetEpochMs !== null/);
   assert.match(app, /elements\.sourceSwitchDialog\.showModal\(\)/);
   assert.match(app, /document\.activeElement\?\.blur\(\)/);
+  assert.match(
+    app,
+    /const sourceMenuWasOpen = elements\.sourceMenu\.open[\s\S]*?const themeMenuWasOpen = elements\.themeMenu\.open[\s\S]*?event\.preventDefault\(\)[\s\S]*?event\.stopPropagation\(\)[\s\S]*?\}, true\);/,
+  );
   assert.doesNotMatch(app, /sourceSelect\.focus\(\)/);
   assert.doesNotMatch(app, /selectedOptions/);
 });
