@@ -212,13 +212,27 @@ function bindEvents() {
     window.floatingClock.minimize();
   });
   document.addEventListener("click", (event) => {
-    if (!elements.sourceMenu.contains(event.target)) {
+    const sourceMenuWasOpen = elements.sourceMenu.open;
+    const themeMenuWasOpen = elements.themeMenu.open;
+    const clickedInsideSourceMenu = elements.sourceMenu.contains(event.target);
+    const clickedInsideThemeMenu = elements.themeMenu.contains(event.target);
+
+    if (!clickedInsideSourceMenu) {
       elements.sourceMenu.open = false;
     }
-    if (!elements.themeMenu.contains(event.target)) {
+    if (!clickedInsideThemeMenu) {
       elements.themeMenu.open = false;
     }
-  });
+
+    if (
+      (sourceMenuWasOpen || themeMenuWasOpen)
+      && !clickedInsideSourceMenu
+      && !clickedInsideThemeMenu
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }, true);
 
   elements.clockModeButton.addEventListener("click", () => setMode("clock"));
   elements.countdownModeButton.addEventListener("click", () => setMode("countdown"));
