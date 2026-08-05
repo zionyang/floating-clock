@@ -75,8 +75,11 @@
             <span id="countdownPrecisionTooltip" class="time-precision-tooltip" role="tooltip" hidden>显示整秒</span>
         </div>
         <label class="target-row">
-          <span id="targetTimeZoneLabel">目标北京时间</span>
-          <input id="targetInput" type="datetime-local" step="0.001" />
+          <span id="targetTimeZoneLabel">目标时间</span>
+          <span class="target-input-wrap">
+            <input id="targetInput" type="datetime-local" step="0.001" tabindex="-1" aria-label="目标时间" />
+            <button id="targetPickerTrigger" class="target-picker-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="打开目标时间选择器"></button>
+          </span>
         </label>
         <div class="quick-targets" aria-label="快捷倒计时目标">
           <button type="button" data-quick-target="next-hour">下一整点</button>
@@ -92,6 +95,8 @@
       <footer class="statusbar">
         <p id="syncStatus">准备校准</p>
       </footer>
+
+      <div id="targetPickerShield" class="target-picker-shield" hidden aria-hidden="true"></div>
 
       <dialog id="sourceSwitchDialog" class="source-switch-dialog" aria-labelledby="sourceSwitchDialogTitle" aria-describedby="sourceSwitchDialogDescription">
         <form method="dialog" class="source-switch-dialog-content">
@@ -114,7 +119,27 @@
         </div>
       </details>
 
-      <section class="mini-panel" aria-label="Mini 模式时间">
+      <details id="reminderMenu" class="reminder-menu">
+        <summary id="reminderSelect" class="reminder-select" title="整点提醒" aria-label="整点提醒">🔔</summary>
+        <div id="reminderOptions" class="reminder-options" aria-label="整点提醒设置">
+          <label class="reminder-option">
+            <span class="reminder-option-copy">
+              <strong>整点高亮</strong>
+              <small>提前 5 秒</small>
+            </span>
+            <input id="hourlyHighlightToggle" class="reminder-toggle" type="checkbox" role="switch" />
+          </label>
+          <label class="reminder-option">
+            <span class="reminder-option-copy">
+              <strong>整点报时</strong>
+              <small>整点播放提示音</small>
+            </span>
+            <input id="hourlyChimeToggle" class="reminder-toggle" type="checkbox" role="switch" />
+          </label>
+        </div>
+      </details>
+
+      <section class="mini-panel" aria-label="Mini 模式时间" data-tauri-drag-region="deep">
         <p id="miniSource" class="mini-source">加载时间源…</p>
         <p id="miniValue" class="mini-value">--:--:--.---</p>
         <p id="miniDate" class="mini-date">等待校准</p>

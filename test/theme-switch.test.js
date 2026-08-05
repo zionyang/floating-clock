@@ -19,7 +19,7 @@ test("offers validated preset themes and remembers the selected theme", () => {
   assert.match(html, /data-theme="sakura">樱粉<\/button>/);
   assert.match(css, /:root\[data-theme="light"\]\s*\{/);
   assert.match(css, /:root\[data-theme="black"\]\s*\{[\s\S]*?--radius-shell:\s*0[\s\S]*?--color-accent:\s*#58c7a2[\s\S]*?--color-accent-rgb:\s*88, 199, 162/);
-  assert.match(css, /:root\[data-theme="sakura"\]\s*\{[\s\S]*?--radius-shell:\s*20px[\s\S]*?--radius-panel:\s*16px[\s\S]*?--radius-control:\s*11px[\s\S]*?--color-accent:\s*#ff75b5[\s\S]*?--color-text-rgb:\s*135, 91, 137[\s\S]*?--color-border-rgb:\s*248, 128, 183[\s\S]*?--color-surface-rgb:\s*255, 147, 195/);
+  assert.match(css, /:root\[data-theme="sakura"\]\s*\{[\s\S]*?--radius-shell:\s*8px[\s\S]*?--radius-panel:\s*16px[\s\S]*?--radius-control:\s*11px[\s\S]*?--color-accent:\s*#ff75b5[\s\S]*?--color-text-rgb:\s*135, 91, 137[\s\S]*?--color-border-rgb:\s*248, 128, 183[\s\S]*?--color-surface-rgb:\s*255, 147, 195/);
   assert.match(css, /:root\[data-theme="sakura"\] \.titlebar-action\s*\{\s*border-radius:\s*50%/);
   assert.match(css, /\.theme-menu:not\(\[open\]\) \.theme-options/);
   assert.match(css, /\.theme-menu\s*\{[\s\S]*?right:\s*12px[\s\S]*?bottom:\s*12px/);

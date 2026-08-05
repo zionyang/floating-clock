@@ -69,7 +69,7 @@
 :root[data-theme="sakura"] {
   --color-scheme: light;
   --font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
-  --radius-shell: 20px;
+  --radius-shell: 8px;
   --radius-panel: 16px;
   --radius-control: 11px;
   --radius-option: 11px;
@@ -101,7 +101,7 @@
   border-radius: 50%;
 }
 
-:root[data-theme="sakura"] :where(.source-options, .theme-options) {
+:root[data-theme="sakura"] :where(.source-options, .theme-options, .reminder-options) {
   box-shadow: 0 10px 22px rgba(var(--color-shadow-rgb), 0.14);
 }
 
@@ -171,8 +171,16 @@ select {
 
 .clock-shell.mini {
   display: block;
-  padding: 10px 12px;
+  padding: 0;
   cursor: grab;
+}
+
+:root[data-theme="black"] .clock-shell.mini {
+  border-radius: 0;
+  border: 1px solid rgba(var(--color-accent-rgb), 0.34);
+  background-color: var(--color-shell-base);
+  background-image: linear-gradient(90deg, rgba(var(--color-accent-rgb), 0.14), rgba(var(--color-surface-rgb), 0.04));
+  box-shadow: none;
 }
 
 .clock-shell.mini:active {
@@ -189,8 +197,9 @@ select {
   width: 100%;
   height: 100%;
   display: grid;
-  grid-template-rows: 12px 40px 12px;
-  gap: 3px;
+  grid-template-rows: 14px 40px 14px;
+  gap: 2px;
+  padding: 8px 14px;
   align-content: center;
   align-items: center;
   justify-items: center;
@@ -206,19 +215,33 @@ select {
 .mini-source {
   color: var(--color-mini-source);
   font-size: 11px;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.mini-source::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(var(--color-accent-rgb), 0.12);
+  vertical-align: middle;
 }
 
 .mini-date {
   color: rgba(var(--color-text-rgb), 0.64);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .mini-value {
   margin: 0;
   color: var(--color-fg);
   font-size: 40px;
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   font-weight: 700;
   line-height: 1;
   text-align: center;
@@ -256,22 +279,14 @@ select {
 }
 
 .mini-action {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--color-fg);
   cursor: pointer;
-}
-
-.mini-action:first-child {
-  border-radius: var(--radius-mini-action) 0 0 0;
-}
-
-.mini-action:last-child {
-  border-radius: 0 0 0 var(--radius-mini-action);
 }
 
 .mini-action:hover {
@@ -318,7 +333,7 @@ select {
 }
 
 .titlebar-drag-surface .presentation-switch-tooltip {
-  left: calc(50% + 30px);
+  left: 50%;
   top: calc(100% + 6px);
   bottom: auto;
 }
@@ -379,6 +394,13 @@ select {
   position: absolute;
   z-index: 3;
   right: 12px;
+  bottom: 12px;
+}
+
+.reminder-menu {
+  position: absolute;
+  z-index: 3;
+  right: 44px;
   bottom: 12px;
 }
 
@@ -451,8 +473,128 @@ select {
 }
 
 .theme-select:hover,
-.theme-select:focus-visible {
+.theme-select:focus-visible,
+.reminder-select:hover,
+.reminder-select:focus-visible {
   background: rgba(var(--color-surface-rgb), 0.1);
+}
+
+.reminder-select {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  place-items: center;
+  list-style: none;
+  font-family: "Segoe UI Emoji", sans-serif;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reminder-select::-webkit-details-marker {
+  display: none;
+}
+
+.reminder-select.active {
+  border: 1px solid rgba(var(--color-accent-rgb), 0.76);
+  background: rgba(var(--color-accent-rgb), 0.22);
+  box-shadow: 0 0 0 1px rgba(var(--color-accent-rgb), 0.16);
+}
+
+.reminder-options {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: 196px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(var(--color-accent-rgb), 0.32);
+  border-radius: var(--radius-shell);
+  background: var(--color-raised);
+  box-shadow: 0 14px 28px rgba(var(--color-shadow-rgb), 0.42);
+}
+
+.reminder-menu:not([open]) .reminder-options {
+  display: none;
+}
+
+.reminder-option {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 6px 6px 8px;
+  border-radius: var(--radius-option);
+  cursor: pointer;
+}
+
+.reminder-option:hover {
+  background: rgba(var(--color-surface-rgb), 0.1);
+}
+
+.reminder-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.reminder-option-copy strong {
+  color: rgba(var(--color-text-rgb), 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.reminder-option-copy small {
+  color: rgba(var(--color-text-rgb), 0.56);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.reminder-toggle {
+  flex: 0 0 auto;
+  appearance: none;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid rgba(var(--color-border-rgb), 0.28);
+  border-radius: 999px;
+  background: rgba(var(--color-surface-rgb), 0.12);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.reminder-toggle::after {
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 2px;
+  border-radius: 50%;
+  background: rgba(var(--color-text-rgb), 0.7);
+  content: "";
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.reminder-toggle:checked {
+  border-color: rgba(var(--color-accent-rgb), 0.72);
+  background: var(--color-accent);
+}
+
+.reminder-toggle:checked::after {
+  background: var(--color-on-accent);
+  transform: translateX(12px);
+}
+
+.reminder-toggle:focus-visible {
+  outline: 1px solid rgba(var(--color-accent-rgb), 0.72);
+  outline-offset: 2px;
 }
 
 .titlebar-action,
@@ -770,7 +912,7 @@ select {
 
 .mini-presentation-tooltip {
   top: auto;
-  bottom: -8px;
+  bottom: 6px;
 }
 
 .mini-panel:hover .mini-presentation-tooltip {
@@ -806,19 +948,83 @@ select {
 .target-row {
   min-width: 0;
   gap: 8px;
-  color: rgba(var(--color-text-rgb), 0.68);
+  padding-left: 8px;
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-accent-text);
   font-size: 12px;
+  font-weight: 700;
+}
+
+.target-row > span {
+  white-space: nowrap;
+}
+
+.target-input-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1;
 }
 
 .target-row input {
   min-width: 0;
-  flex: 1;
+  display: block;
+  width: 100%;
   height: 32px;
   padding: 0 8px;
-  border: 1px solid rgba(var(--color-border-rgb), 0.14);
+  border: 1px solid rgba(var(--color-accent-rgb), 0.46);
   border-radius: var(--radius-control);
   background: rgba(var(--color-surface-rgb), 0.08);
-  color: var(--color-fg);
+  color: var(--color-accent-text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+  pointer-events: none;
+}
+
+.target-input-wrap:hover input {
+  border-color: rgba(var(--color-accent-rgb), 0.58);
+  background: rgba(var(--color-surface-rgb), 0.14);
+}
+
+.target-input-wrap:focus-within input {
+  border-color: rgba(var(--color-accent-rgb), 0.82);
+}
+
+.target-picker-trigger {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  cursor: pointer;
+}
+
+.target-picker-trigger:focus-visible {
+  outline: none;
+}
+
+.target-row input.target-changed {
+  animation: target-change-pulse 700ms ease-out;
+}
+
+.target-picker-shield {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.target-picker-shield[hidden] {
+  display: none;
 }
 
 .countdown-actions {
@@ -861,7 +1067,8 @@ select {
   display: grid;
   align-items: start;
   gap: 2px;
-  min-height: 38px;
+  height: 42px;
+  min-height: 42px;
   padding-top: 8px;
   border-top: 1px solid rgba(var(--color-border-rgb), 0.1);
   color: rgba(var(--color-text-rgb), 0.58);
@@ -889,6 +1096,24 @@ select {
 
   50% {
     transform: scale(1.012);
+  }
+}
+
+@keyframes target-change-pulse {
+  0% {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0.5);
+  }
+
+  100% {
+    border-color: rgba(var(--color-accent-rgb), 0.46);
+    box-shadow: 0 0 0 7px rgba(var(--color-accent-rgb), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .target-row input.target-changed {
+    animation: none;
   }
 }
 

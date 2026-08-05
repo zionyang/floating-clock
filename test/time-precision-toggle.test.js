@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const rendererPath = (...segments) => path.join(__dirname, "..", "src", "renderer", ...segments);
 
@@ -68,10 +69,114 @@ test("standard time values keep precision controls while status stays compact", 
   assert.doesNotMatch(app, /elements\.miniValue\.addEventListener/);
 });
 
+test("sync details reserve the statusbar height instead of moving the time panel", () => {
+  const css = fs.readFileSync(rendererPath("styles.css"), "utf8");
+
+  assert.match(css, /\.statusbar\s*\{[\s\S]*?height:\s*42px[\s\S]*?min-height:\s*42px/);
+  assert.match(css, /\.statusbar #syncStatus\.sync-status-details\s*\{[\s\S]*?white-space:\s*pre-line[\s\S]*?line-height:\s*1\.5/);
+});
+
 test("countdown keeps the selected source offset instead of switching to Beijing time", () => {
   const app = fs.readFileSync(rendererPath("app.js"), "utf8");
 
   assert.match(app, /const sourceNow = Date\.now\(\) \+ state\.offsetMs;/);
   assert.match(app, /const remainingMs = state\.countdownTargetEpochMs - sourceNow;/);
   assert.doesNotMatch(app, /syncSource\(["']beijing["']\)/);
+});
+
+test("countdown target is prominent and uses a generic label", () => {
+  const html = fs.readFileSync(rendererPath("index.html"), "utf8");
+  const css = fs.readFileSync(rendererPath("styles.css"), "utf8");
+  const app = fs.readFileSync(rendererPath("app.js"), "utf8");
+
+  assert.match(html, /<span id="targetTimeZoneLabel">目标时间<\/span>/);
+  assert.match(html, /<button id="targetPickerTrigger"[^>]*type="button"/);
+  assert.match(html, /<div id="targetPickerShield"[^>]*hidden/);
+  assert.doesNotMatch(app, /目标北京时间|目标本机时间/);
+  assert.match(app, /elements\.targetPickerTrigger\.addEventListener\("click", openTargetPicker\)/);
+  assert.match(app, /elements\.targetInput\.addEventListener\("input", flashTargetInput\)/);
+  assert.match(app, /elements\.targetInput\.addEventListener\("change", handleTargetInputChange\)/);
+  assert.match(app, /function flashTargetInput\(\)\s*\{[\s\S]*?target-changed[\s\S]*?\}/);
+  assert.match(app, /elements\.targetInput\.classList\.remove\("target-changed"\)/);
+  assert.match(app, /elements\.targetInput\.classList\.add\("target-changed"\)/);
+  assert.match(css, /\.target-row\s*\{[\s\S]*?padding-left:\s*8px[\s\S]*?border-left:\s*3px solid var\(--color-accent\)/);
+  assert.match(css, /\.target-row input\s*\{[\s\S]*?height:\s*32px[\s\S]*?font-size:\s*14px[\s\S]*?font-weight:\s*700[\s\S]*?font-variant-numeric:\s*tabular-nums/);
+  assert.doesNotMatch(css, /\.target-row\s*\{[^}]*display:\s*grid/);
+  assert.match(css, /\.target-row input\.target-changed\s*\{[\s\S]*?animation:\s*target-change-pulse/);
+  assert.match(css, /@keyframes target-change-pulse[\s\S]*?box-shadow:/);
+  assert.doesNotMatch(css, /\.target-input-wrap:focus-within input\s*\{[^}]*box-shadow:/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.target-row input\.target-changed[\s\S]*?animation:\s*none/);
+  assert.match(css, /\.target-picker-shield\s*\{[\s\S]*?position:\s*fixed[\s\S]*?pointer-events:\s*auto/);
+  assert.match(css, /\.target-picker-shield\[hidden\]\s*\{[\s\S]*?display:\s*none/);
+  assert.doesNotMatch(app, /suppressTargetPickerOutsideEvent/);
+});
+
+test("target picker can re-arm after it was dismissed", () => {
+  const app = fs.readFileSync(rendererPath("app.js"), "utf8");
+  const pickerOpener = app.match(
+    /function openTargetPicker\([^)]*\) \{[\s\S]*?\n\}/,
+  )?.[0];
+  const pickerCloser = app.match(
+    /function closeTargetPicker\(\) \{[\s\S]*?\n\}/,
+  )?.[0];
+
+  assert.ok(pickerOpener);
+  assert.ok(pickerCloser);
+
+  const state = { targetPickerOpen: false };
+  const elements = {
+    targetInput: {
+      focus: () => {},
+      blur: () => {},
+      showPicker: () => {},
+    },
+    targetPickerShield: {
+      hidden: true,
+      setAttribute: () => {},
+    },
+    targetPickerTrigger: {
+      setAttribute: () => {},
+    },
+  };
+  const context = { elements, state };
+  const openTargetPicker = vm.runInNewContext(`(${pickerOpener})`, context);
+  const closeTargetPicker = vm.runInNewContext(`(${pickerCloser})`, context);
+  openTargetPicker({ preventDefault: () => {} });
+  assert.equal(state.targetPickerOpen, true);
+  closeTargetPicker();
+  assert.equal(state.targetPickerOpen, false);
+  openTargetPicker({ preventDefault: () => {} });
+  assert.equal(state.targetPickerOpen, true);
+});
+
+test("target picker shield consumes outside activation", () => {
+  const app = fs.readFileSync(rendererPath("app.js"), "utf8");
+  const pickerHandler = app.match(
+    /function dismissTargetPicker\(event\) \{[\s\S]*?\n\}/,
+  )?.[0];
+
+  assert.ok(pickerHandler);
+
+  let prevented = 0;
+  let stopped = 0;
+  let closed = 0;
+  const context = {
+    closeTargetPicker: () => {
+      closed += 1;
+    },
+  };
+  const suppressOutsideEvent = vm.runInNewContext(`(${pickerHandler})`, context);
+  const outsideEvent = {
+    preventDefault: () => {
+      prevented += 1;
+    },
+    stopImmediatePropagation: () => {
+      stopped += 1;
+    },
+  };
+
+  suppressOutsideEvent(outsideEvent);
+  assert.equal(prevented, 1);
+  assert.equal(stopped, 1);
+  assert.equal(closed, 1);
 });

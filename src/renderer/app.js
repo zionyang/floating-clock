@@ -10,6 +10,8 @@ const elements = {
   countdownPrecisionTooltip: document.querySelector("#countdownPrecisionTooltip"),
   countdownValue: document.querySelector("#countdownValue"),
   dateValue: document.querySelector("#dateValue"),
+  hourlyChimeToggle: document.querySelector("#hourlyChimeToggle"),
+  hourlyHighlightToggle: document.querySelector("#hourlyHighlightToggle"),
   topmostButton: document.querySelector("#topmostButton"),
   minimizeButton: document.querySelector("#minimizeButton"),
   miniCloseButton: document.querySelector("#miniCloseButton"),
@@ -20,6 +22,8 @@ const elements = {
   miniRestoreButton: document.querySelector("#miniRestoreButton"),
   miniSource: document.querySelector("#miniSource"),
   miniValue: document.querySelector("#miniValue"),
+  reminderMenu: document.querySelector("#reminderMenu"),
+  reminderSelect: document.querySelector("#reminderSelect"),
   sourceMenu: document.querySelector("#sourceMenu"),
   sourceOptions: document.querySelector("#sourceOptions"),
   sourceSelect: document.querySelector("#sourceSelect"),
@@ -30,7 +34,8 @@ const elements = {
   syncButton: document.querySelector("#syncButton"),
   syncStatus: document.querySelector("#syncStatus"),
   targetInput: document.querySelector("#targetInput"),
-  targetTimeZoneLabel: document.querySelector("#targetTimeZoneLabel"),
+  targetPickerShield: document.querySelector("#targetPickerShield"),
+  targetPickerTrigger: document.querySelector("#targetPickerTrigger"),
   themeMenu: document.querySelector("#themeMenu"),
   themeOptions: document.querySelector("#themeOptions"),
   themeSelect: document.querySelector("#themeSelect"),
@@ -58,6 +63,7 @@ const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
 const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
 const LOCAL_WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+const PRESENTATION_DOUBLE_CLICK_GUARD_MS = 500;
 const THEME_TITLES = {
   amber: { title: "悬浮时钟", badge: "🌙", subtitle: "AMBER" },
   light: { title: "悬浮时钟", badge: "☀️", subtitle: "MIST" },
@@ -66,13 +72,21 @@ const THEME_TITLES = {
 };
 const THEME_IDS = new Set(Object.keys(THEME_TITLES));
 const STORAGE_KEYS = {
+  hourlyChime: "floatingClock.hourlyChime",
+  hourlyHighlight: "floatingClock.hourlyHighlight",
   mode: "floatingClock.mode",
   sourceId: "floatingClock.sourceId",
   theme: "floatingClock.theme",
 };
 const state = {
   countdownTargetEpochMs: null,
+  audioContext: null,
+  targetPickerOpen: false,
   hasValidOffset: false,
+  hourlyChimeEnabled: readStoredBoolean(STORAGE_KEYS.hourlyChime, false),
+  hourlyHighlightEnabled: readStoredBoolean(STORAGE_KEYS.hourlyHighlight, true),
+  lastChimeHourKey: null,
+  lastClockSourceNow: null,
   launchAtLogin: false,
   mode: readStoredMode(),
   offsetMs: 0,
@@ -85,6 +99,7 @@ const state = {
   miniResizeFrame: null,
   miniValueLength: null,
   miniWidth: MINI_WINDOW_MIN_WIDTH,
+  presentationDoubleClickGuardUntil: 0,
   sourceId: readStoredSourceId(),
   sources: [],
   syncDetails: null,
@@ -114,6 +129,7 @@ bootstrap();
 
 async function bootstrap() {
   bindEvents();
+  updateReminderControls();
   updateTimePrecisionControls();
   const controls = await window.floatingClock.getWindowControls();
   updateWindowControls(controls);
@@ -150,12 +166,20 @@ async function bootstrap() {
 }
 
 function bindEvents() {
+  document.addEventListener("mousedown", suppressPresentationDoubleClick, true);
+  document.addEventListener("click", suppressPresentationDoubleClick, true);
+  document.addEventListener("dblclick", suppressPresentationDoubleClick, true);
   elements.closeButton.addEventListener("click", () => window.floatingClock.close());
   elements.topmostButton.addEventListener("click", toggleWindowTopmost);
   elements.minimizeButton.addEventListener("click", () => window.floatingClock.minimize());
   elements.clockValue.addEventListener("click", toggleTimePrecision);
   elements.countdownValue.addEventListener("click", toggleTimePrecision);
   elements.syncStatus.addEventListener("click", toggleSyncDetails);
+  elements.targetPickerTrigger.addEventListener("click", openTargetPicker);
+  elements.targetInput.addEventListener("input", flashTargetInput);
+  elements.targetInput.addEventListener("change", handleTargetInputChange);
+  elements.targetPickerShield.addEventListener("pointerdown", dismissTargetPicker);
+  elements.targetPickerShield.addEventListener("click", dismissTargetPicker);
   elements.titlebar.addEventListener("mousedown", (event) => {
     if (
       event.button !== 0
@@ -169,10 +193,24 @@ function bindEvents() {
     event.stopPropagation();
     setWindowPresentation(true);
   }, true);
-  elements.miniModeButton.addEventListener("click", () => setWindowPresentation(true));
-  elements.miniRestoreButton.addEventListener("click", () => setWindowPresentation(false));
-  elements.miniCloseButton.addEventListener("click", () => window.floatingClock.close());
-  elements.miniMinimizeButton.addEventListener("click", () => window.floatingClock.minimize());
+  elements.miniModeButton.addEventListener("click", (event) => {
+    if (event.detail > 1) return;
+    markPresentationButtonAction();
+    setWindowPresentation(true);
+  });
+  elements.miniRestoreButton.addEventListener("click", (event) => {
+    if (event.detail > 1) return;
+    markPresentationButtonAction();
+    setWindowPresentation(false);
+  });
+  elements.miniCloseButton.addEventListener("click", (event) => {
+    if (event.detail > 1) return;
+    window.floatingClock.close();
+  });
+  elements.miniMinimizeButton.addEventListener("click", (event) => {
+    if (event.detail > 1) return;
+    window.floatingClock.minimize();
+  });
   elements.miniPanel.addEventListener("mousedown", (event) => {
     if (state.presentation !== "mini" || event.button !== 0 || event.detail !== 2) {
       return;
@@ -187,6 +225,12 @@ function bindEvents() {
   elements.themeOptionButtons.forEach((button) => {
     button.addEventListener("click", () => applyTheme(button.dataset.theme));
   });
+  elements.hourlyHighlightToggle.addEventListener("change", (event) => {
+    setHourlyHighlightEnabled(event.target.checked);
+  });
+  elements.hourlyChimeToggle.addEventListener("change", (event) => {
+    setHourlyChimeEnabled(event.target.checked);
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") {
       return;
@@ -198,12 +242,19 @@ function bindEvents() {
       return;
     }
 
+    if (state.targetPickerOpen) {
+      event.preventDefault();
+      closeTargetPicker();
+      return;
+    }
+
     if (
       state.presentation === "standard"
-      && (elements.sourceMenu.open || elements.themeMenu.open)
+      && (elements.sourceMenu.open || elements.themeMenu.open || elements.reminderMenu.open)
     ) {
       elements.sourceMenu.open = false;
       elements.themeMenu.open = false;
+      elements.reminderMenu.open = false;
       document.activeElement?.blur();
       return;
     }
@@ -214,8 +265,10 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     const sourceMenuWasOpen = elements.sourceMenu.open;
     const themeMenuWasOpen = elements.themeMenu.open;
+    const reminderMenuWasOpen = elements.reminderMenu.open;
     const clickedInsideSourceMenu = elements.sourceMenu.contains(event.target);
     const clickedInsideThemeMenu = elements.themeMenu.contains(event.target);
+    const clickedInsideReminderMenu = elements.reminderMenu.contains(event.target);
 
     if (!clickedInsideSourceMenu) {
       elements.sourceMenu.open = false;
@@ -223,11 +276,15 @@ function bindEvents() {
     if (!clickedInsideThemeMenu) {
       elements.themeMenu.open = false;
     }
+    if (!clickedInsideReminderMenu) {
+      elements.reminderMenu.open = false;
+    }
 
     if (
-      (sourceMenuWasOpen || themeMenuWasOpen)
+      (sourceMenuWasOpen || themeMenuWasOpen || reminderMenuWasOpen)
       && !clickedInsideSourceMenu
       && !clickedInsideThemeMenu
+      && !clickedInsideReminderMenu
     ) {
       event.preventDefault();
       event.stopPropagation();
@@ -264,6 +321,7 @@ async function syncSelectedSource() {
     state.offsetSourceId = syncResult.sourceId;
     state.sourcePrecision = syncResult.precision;
     state.sourceSupportsMilliseconds = syncResult.supportsMilliseconds;
+    resetHourlyChimeBaseline();
     state.showMilliseconds = getDisplayPrecision(
       state.showMilliseconds,
       hadValidOffset,
@@ -295,6 +353,7 @@ async function syncSelectedSource() {
       state.hasValidOffset = false;
       state.sourcePrecision = "unknown";
       state.sourceSupportsMilliseconds = null;
+      resetHourlyChimeBaseline();
       setSyncStatus(`${sourceLabel} · 校准失败，暂用本机时间`, null);
     }
 
@@ -306,6 +365,19 @@ async function syncSelectedSource() {
       updateSyncControls();
     }
   }
+}
+
+function markPresentationButtonAction() {
+  state.presentationDoubleClickGuardUntil = Date.now() + PRESENTATION_DOUBLE_CLICK_GUARD_MS;
+}
+
+function suppressPresentationDoubleClick(event) {
+  if (event.detail <= 1 || Date.now() >= state.presentationDoubleClickGuardUntil) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 async function selectSource(sourceId) {
@@ -325,6 +397,7 @@ async function selectSource(sourceId) {
 
   resetCountdownForSourceSwitch();
   state.sourceId = sourceId;
+  resetHourlyChimeBaseline();
   state.sourcePrecision = "unknown";
   state.sourceSupportsMilliseconds = null;
   updateTimePrecisionControls();
@@ -336,6 +409,7 @@ async function selectSource(sourceId) {
 
 function applyLocalTime() {
   state.offsetMs = 0;
+  resetHourlyChimeBaseline();
   state.offsetSourceId = null;
   state.hasValidOffset = false;
   state.sourcePrecision = "millisecond";
@@ -386,9 +460,6 @@ function updateSourceSelect() {
   elements.sourceSelectValue.textContent = selectedSource?.label || "时间源";
   elements.sourceSelect.title = selectedSource?.description || "";
   elements.miniSource.textContent = selectedSource?.label || "时间源";
-  elements.targetTimeZoneLabel.textContent = isLocalTimeSource()
-    ? "目标本机时间"
-    : "目标北京时间";
   updateSyncControls();
 
   elements.sourceOptions.querySelectorAll(".source-option").forEach((option) => {
@@ -411,7 +482,8 @@ function render() {
   const clockText = formatTimePrecision(
     `${clockParts.hour}:${clockParts.minute}:${clockParts.second}.${clockParts.millisecond}`,
   );
-  const clockCritical = isClockCritical(sourceNow);
+  maybePlayHourlyChime(sourceNow);
+  const clockCritical = state.hourlyHighlightEnabled && isClockCritical(sourceNow);
   updateTargetInputMinimum(sourceNow);
 
   elements.clockValue.textContent = clockText;
@@ -444,7 +516,11 @@ function render() {
 }
 
 function setMode(mode) {
+  const modeChanged = state.mode !== mode;
   state.mode = mode;
+  if (modeChanged) {
+    resetHourlyChimeBaseline();
+  }
   localStorage.setItem(STORAGE_KEYS.mode, mode);
   const clockMode = mode === "clock";
 
@@ -455,6 +531,142 @@ function setMode(mode) {
   elements.clockModeButton.setAttribute("aria-selected", String(clockMode));
   elements.countdownModeButton.setAttribute("aria-selected", String(!clockMode));
   render();
+}
+
+function setHourlyHighlightEnabled(enabled) {
+  state.hourlyHighlightEnabled = enabled;
+  localStorage.setItem(STORAGE_KEYS.hourlyHighlight, String(enabled));
+  updateReminderControls();
+  render();
+}
+
+function setHourlyChimeEnabled(enabled) {
+  state.hourlyChimeEnabled = enabled;
+  localStorage.setItem(STORAGE_KEYS.hourlyChime, String(enabled));
+  if (enabled) {
+    unlockHourlyChime();
+  }
+  updateReminderControls();
+}
+
+function updateReminderControls() {
+  elements.hourlyHighlightToggle.checked = state.hourlyHighlightEnabled;
+  elements.hourlyChimeToggle.checked = state.hourlyChimeEnabled;
+  elements.reminderSelect.classList.toggle(
+    "active",
+    state.hourlyHighlightEnabled || state.hourlyChimeEnabled,
+  );
+  const status = [
+    state.hourlyHighlightEnabled ? "高亮开" : "高亮关",
+    state.hourlyChimeEnabled ? "报时开" : "报时关",
+  ].join("，");
+  elements.reminderSelect.title = `整点提醒（${status}）`;
+  elements.reminderSelect.setAttribute("aria-label", elements.reminderSelect.title);
+}
+
+function maybePlayHourlyChime(sourceNow) {
+  if (state.mode !== "clock") {
+    resetHourlyChimeBaseline();
+    return;
+  }
+
+  const hourKey = getClockHourKey(sourceNow);
+  const previousHourKey = state.lastChimeHourKey;
+  const previousSourceNow = state.lastClockSourceNow;
+  state.lastChimeHourKey = hourKey;
+  state.lastClockSourceNow = sourceNow;
+
+  if (previousHourKey === null || previousHourKey === hourKey) {
+    return;
+  }
+
+  const elapsedMs = previousSourceNow === null ? Number.POSITIVE_INFINITY : sourceNow - previousSourceNow;
+  const currentParts = getClockTimeParts(sourceNow);
+  if (
+    state.hourlyChimeEnabled && elapsedMs >= 0 && elapsedMs <= 5000
+    && currentParts.minute === "00"
+    && Number(currentParts.second) <= 2
+  ) {
+    playHourlyChime();
+  }
+}
+
+function resetHourlyChimeBaseline() {
+  state.lastChimeHourKey = null;
+  state.lastClockSourceNow = null;
+}
+
+function getAudioContext() {
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    return null;
+  }
+
+  if (state.audioContext?.state === "closed") {
+    state.audioContext = null;
+  }
+
+  if (state.audioContext === null) {
+    try {
+      state.audioContext = new AudioContextConstructor();
+    } catch {
+      return null;
+    }
+  }
+
+  return state.audioContext;
+}
+
+function unlockHourlyChime() {
+  const context = getAudioContext();
+  if (context?.state === "suspended") {
+    void context.resume().catch(() => {});
+  }
+}
+
+function playHourlyChime() {
+  const context = getAudioContext();
+  if (!context) {
+    return;
+  }
+
+  const schedule = () => {
+    const now = context.currentTime;
+    const masterGain = context.createGain();
+    masterGain.gain.setValueAtTime(0.55, now);
+    masterGain.connect(context.destination);
+
+    [
+      { frequency: 880, offset: 0, duration: 0.24 },
+      { frequency: 1320, offset: 0.1, duration: 0.34 },
+    ].forEach(({ frequency, offset, duration }) => {
+      const oscillator = context.createOscillator();
+      const toneGain = context.createGain();
+      const start = now + offset;
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      toneGain.gain.setValueAtTime(0.0001, start);
+      toneGain.gain.exponentialRampToValueAtTime(0.15, start + 0.012);
+      toneGain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      oscillator.connect(toneGain);
+      toneGain.connect(masterGain);
+      oscillator.addEventListener("ended", () => {
+        oscillator.disconnect();
+        toneGain.disconnect();
+      }, { once: true });
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.02);
+    });
+
+    window.setTimeout(() => masterGain.disconnect(), 700);
+  };
+
+  if (context.state === "suspended") {
+    void context.resume().then(schedule).catch(() => {});
+    return;
+  }
+
+  schedule();
 }
 
 function toggleTimePrecision() {
@@ -576,9 +788,15 @@ async function setWindowPresentation(mini) {
 }
 
 function applyPresentation(mini) {
-  state.presentation = mini ? "mini" : "standard";
-  elements.clockShell.setAttribute("data-tauri-drag-region", mini ? "deep" : "false");
+  const nextPresentation = mini ? "mini" : "standard";
+  if (state.presentation !== nextPresentation) {
+    document.activeElement?.blur();
+  }
+
+  state.presentation = nextPresentation;
+  elements.clockShell.setAttribute("data-tauri-drag-region", "false");
   elements.clockShell.classList.toggle("mini", mini);
+  void window.floatingClock.setWindowCornerPreference(mini && state.theme === "black");
   if (mini) {
     scheduleMiniResize(true);
   } else {
@@ -612,7 +830,10 @@ function scheduleMiniResize(force = false) {
 
     state.miniWidth = nextWidth;
     try {
-      await window.floatingClock.setWindowPresentation(true, nextWidth);
+      await window.floatingClock.resizeMiniWindow(nextWidth);
+      await window.floatingClock.setWindowCornerPreference(
+        state.presentation === "mini" && state.theme === "black",
+      );
     } catch (error) {
       console.error(error);
     }
@@ -657,6 +878,18 @@ function getLocalTimeParts(epochMs) {
   };
 }
 
+function getClockHourKey(epochMs) {
+  const timeParts = getClockTimeParts(epochMs);
+  if (isLocalTimeSource()) {
+    const value = new Date(epochMs);
+    return `${value.getFullYear()}-${value.getMonth() + 1}-${value.getDate()}-${timeParts.hour}`;
+  }
+
+  const dateParts = beijingDateFormatter.formatToParts(epochMs);
+  const values = Object.fromEntries(dateParts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}-${timeParts.hour}`;
+}
+
 function isClockCritical(epochMs) {
   const nextHourDistanceMs = getNextTargetHour(epochMs) - epochMs;
 
@@ -667,14 +900,65 @@ function setCriticalState(element, isCritical) {
   element.classList.toggle("critical", isCritical);
 }
 
+function openTargetPicker(event) {
+  event.preventDefault();
+  state.targetPickerOpen = true;
+  elements.targetPickerShield.hidden = false;
+  elements.targetPickerShield.setAttribute("aria-hidden", "false");
+  elements.targetPickerTrigger.setAttribute("aria-expanded", "true");
+
+  elements.targetInput.focus();
+  if (typeof elements.targetInput.showPicker === "function") {
+    try {
+      elements.targetInput.showPicker();
+      return;
+    } catch {
+      // Fall back to the native input click when showPicker is unavailable.
+    }
+  }
+
+  elements.targetInput.click();
+}
+
+function closeTargetPicker() {
+  state.targetPickerOpen = false;
+  elements.targetPickerShield.hidden = true;
+  elements.targetPickerShield.setAttribute("aria-hidden", "true");
+  elements.targetPickerTrigger.setAttribute("aria-expanded", "false");
+  elements.targetInput.blur();
+}
+
+function dismissTargetPicker(event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeTargetPicker();
+}
+
+function handleTargetInputChange() {
+  flashTargetInput();
+  closeTargetPicker();
+}
+
+function flashTargetInput() {
+  elements.targetInput.classList.remove("target-changed");
+  void elements.targetInput.offsetWidth;
+  elements.targetInput.classList.add("target-changed");
+}
+
 function setQuickCountdownTarget(target) {
   const sourceNow = getSourceNow();
   const targetEpochMs = target === "next-hour"
     ? getNextTargetHour(sourceNow)
     : getNextTargetAtTime(sourceNow, target);
+  const nextTargetValue = toTargetInputValue(targetEpochMs);
+  const currentTargetEpochMs = parseTargetInput(elements.targetInput.value);
 
-  elements.targetInput.value = toTargetInputValue(targetEpochMs);
-  startCountdown();
+  if (Number.isFinite(currentTargetEpochMs) && currentTargetEpochMs === targetEpochMs) {
+    return;
+  }
+
+  elements.targetInput.value = nextTargetValue;
+  flashTargetInput();
 }
 
 function getNextTargetHour(epochMs) {
@@ -823,6 +1107,11 @@ function readStoredSourceId() {
   return localStorage.getItem(STORAGE_KEYS.sourceId) || "beijing";
 }
 
+function readStoredBoolean(key, fallback) {
+  const value = localStorage.getItem(key);
+  return value === null ? fallback : value === "true";
+}
+
 function readStoredTheme() {
   const theme = localStorage.getItem(STORAGE_KEYS.theme);
   return THEME_IDS.has(theme) ? theme : "amber";
@@ -847,6 +1136,9 @@ function applyTheme(theme, persist = true) {
   const label = elements.themeOptions.querySelector(`[data-theme="${theme}"]`)?.textContent || "琥珀暗";
   elements.themeSelect.title = `切换主题（当前：${label}）`;
   elements.themeSelect.setAttribute("aria-label", elements.themeSelect.title);
+  void window.floatingClock.setWindowCornerPreference(
+    state.presentation === "mini" && theme === "black",
+  );
 
   if (persist) {
     localStorage.setItem(STORAGE_KEYS.theme, theme);

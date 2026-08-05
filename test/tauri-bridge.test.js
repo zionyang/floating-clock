@@ -108,6 +108,12 @@ test("Tauri bridge exposes Mini presentation changes", async () => {
           if (command === "set_window_presentation") {
             return { mini: arguments.mini };
           }
+          if (command === "resize_mini_window") {
+            return undefined;
+          }
+          if (command === "set_window_corner_preference") {
+            return undefined;
+          }
           throw new Error(`Unexpected command: ${command}`);
         },
       },
@@ -128,6 +134,14 @@ test("Tauri bridge exposes Mini presentation changes", async () => {
   assert.equal(calls[0].command, "set_window_presentation");
   assert.equal(calls[0].arguments.mini, true);
   assert.equal(calls[0].arguments.width, 320);
+
+  await window.floatingClock.resizeMiniWindow(340);
+  assert.equal(calls[1].command, "resize_mini_window");
+  assert.equal(calls[1].arguments.width, 340);
+
+  await window.floatingClock.setWindowCornerPreference(true);
+  assert.equal(calls[2].command, "set_window_corner_preference");
+  assert.equal(calls[2].arguments.square, true);
 
   let received = null;
   await window.floatingClock.onWindowPresentationChanged((presentation) => {

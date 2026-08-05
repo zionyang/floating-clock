@@ -52,6 +52,54 @@ test("requires countdown targets to be later than source time", () => {
   assert.equal(isFutureTarget(Date.UTC(2026, 4, 22, 4, 0, 0), Date.UTC(2026, 4, 22, 4, 11, 37)), false);
 });
 
+test("quick countdown targets wait for the explicit start action", () => {
+  const app = fs.readFileSync(
+    path.join(__dirname, "..", "src", "renderer", "app.js"),
+    "utf8",
+  );
+  const quickTargetHandler = app.match(
+    /function setQuickCountdownTarget\(target\) \{[\s\S]*?\n\}/,
+  )?.[0];
+  const targetInput = {
+    value: "",
+    classList: { add() {}, remove() {} },
+    offsetWidth: 0,
+  };
+  const targetValues = {
+    "next-hour": 1000,
+    "10:00": 2000,
+    "20:00": 3000,
+  };
+  let started = false;
+  let flashes = 0;
+
+  assert.ok(quickTargetHandler);
+  const context = {
+    elements: { targetInput },
+    flashTargetInput: () => {
+      flashes += 1;
+    },
+    getNextTargetAtTime: (_sourceNow, target) => targetValues[target],
+    getNextTargetHour: () => targetValues["next-hour"],
+    getSourceNow: () => 123,
+    parseTargetInput: (value) => Number(value),
+    startCountdown: () => {
+      started = true;
+    },
+    toTargetInputValue: (target) => String(target),
+  };
+
+  for (const target of ["next-hour", "10:00", "20:00"]) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      vm.runInNewContext(`(${quickTargetHandler})(${JSON.stringify(target)})`, context);
+      assert.equal(targetInput.value, String(targetValues[target]));
+    }
+  }
+
+  assert.equal(started, false);
+  assert.equal(flashes, 3);
+});
+
 test("keeps browser script helpers out of the renderer global lexical scope", () => {
   const browserContext = vm.createContext({
     Date,

@@ -18,6 +18,11 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartExt};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_updater::UpdaterExt;
 use tauri_plugin_window_state::StateFlags;
+#[cfg(windows)]
+use windows::Win32::Graphics::Dwm::{
+    DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_DEFAULT, DWMWA_COLOR_NONE,
+    DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DEFAULT, DWMWCP_DONOTROUND,
+};
 
 const SHORTCUT: &str = "Ctrl+Alt+T";
 const NTP_SERVERS: &[&str] = &[
@@ -261,6 +266,44 @@ fn emit_controls(app: &AppHandle) -> Result<WindowControls, String> {
     Ok(controls)
 }
 
+fn apply_window_corner_preference(window: &tauri::WebviewWindow, square: bool) {
+    #[cfg(windows)]
+    {
+        let Ok(hwnd) = window.hwnd() else {
+            return;
+        };
+        let preference = if square {
+            DWMWCP_DONOTROUND
+        } else {
+            DWMWCP_DEFAULT
+        };
+        let border_color = if square {
+            DWMWA_COLOR_NONE
+        } else {
+            DWMWA_COLOR_DEFAULT
+        };
+        let _ = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &preference as *const _ as *const std::ffi::c_void,
+                std::mem::size_of_val(&preference) as u32,
+            )
+        };
+        let _ = unsafe {
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR,
+                &border_color as *const _ as *const std::ffi::c_void,
+                std::mem::size_of_val(&border_color) as u32,
+            )
+        };
+    }
+
+    #[cfg(not(windows))]
+    let _ = (window, square);
+}
+
 fn apply_topmost(app: &AppHandle, enabled: bool) -> Result<WindowControls, String> {
     let state = app.state::<ControlsState>();
     if !topmost_change_allowed(state.mini.load(Ordering::Relaxed)) {
@@ -310,9 +353,11 @@ fn apply_presentation(
         .set_skip_taskbar(mini)
         .map_err(|error| error.to_string())?;
     window
+        .set_shadow(!mini)
+        .map_err(|error| error.to_string())?;
+    window
         .set_size(LogicalSize::new(width, height))
         .map_err(|error| error.to_string())?;
-
     state.mini.store(mini, Ordering::Relaxed);
     let menu = app.state::<ControlsMenu>();
     menu.mini
@@ -384,6 +429,34 @@ fn set_window_presentation(
     width: f64,
 ) -> Result<WindowPresentation, String> {
     apply_presentation(&app, mini, width)
+}
+
+#[tauri::command]
+fn set_window_corner_preference(app: AppHandle, square: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or("main window is unavailable")?;
+    apply_window_corner_preference(&window, square);
+    Ok(())
+}
+
+#[tauri::command]
+fn resize_mini_window(app: AppHandle, width: f64) -> Result<(), String> {
+    let state = app.state::<ControlsState>();
+    if !state.mini.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or("main window is unavailable")?;
+    window
+        .set_size(LogicalSize::new(
+            normalize_mini_width(width),
+            MINI_WINDOW_HEIGHT,
+        ))
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -761,6 +834,8 @@ pub fn run() {
             set_launch_at_login,
             set_topmost,
             set_window_presentation,
+            set_window_corner_preference,
+            resize_mini_window,
         ])
         .setup(|app| {
             let shortcut_available = match app.global_shortcut().register(SHORTCUT) {

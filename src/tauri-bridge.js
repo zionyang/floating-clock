@@ -17,6 +17,8 @@
     setLaunchAtLogin: (enabled) => invoke("set_launch_at_login", { enabled }),
     setTopmost: (enabled) => invoke("set_topmost", { enabled }),
     setWindowPresentation: (mini, width) => invoke("set_window_presentation", { mini, width }),
+    setWindowCornerPreference: (square) => invoke("set_window_corner_preference", { square }),
+    resizeMiniWindow: (width) => invoke("resize_mini_window", { width }),
     onWindowControlsChanged: (callback) => {
       const unlisten = listen("window-controls-changed", ({ payload }) => callback(payload));
       return async () => (await unlisten)();
