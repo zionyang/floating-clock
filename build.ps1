@@ -1,6 +1,8 @@
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $version = (Get-Content -LiteralPath (Join-Path $root "package.json") -Raw | ConvertFrom-Json).version
+$packageLock = Get-Content -LiteralPath (Join-Path $root "package-lock.json") -Raw | ConvertFrom-Json -AsHashtable
+$packageLockVersion = $packageLock["packages"][""]["version"]
 $tauriVersion = (Get-Content -LiteralPath (Join-Path $root "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json).version
 $cargoVersion = (Select-String -LiteralPath (Join-Path $root "src-tauri\Cargo.toml") -Pattern '^version\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
 $appName = "FloatingClock"
@@ -8,8 +10,8 @@ $signingDirectory = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".ta
 $defaultSigningKey = Join-Path $signingDirectory "floating-clock.key"
 $encryptedPasswordFile = Join-Path $signingDirectory "floating-clock.password.dpapi"
 
-if ($version -ne $tauriVersion -or $version -ne $cargoVersion) {
-    throw "Version mismatch: package.json=$version, tauri.conf.json=$tauriVersion, Cargo.toml=$cargoVersion"
+if ($version -ne $packageLockVersion -or $version -ne $tauriVersion -or $version -ne $cargoVersion) {
+    throw "Version mismatch: package.json=$version, package-lock.json=$packageLockVersion, tauri.conf.json=$tauriVersion, Cargo.toml=$cargoVersion"
 }
 if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY) -and (Test-Path -LiteralPath $defaultSigningKey)) {
     $env:TAURI_SIGNING_PRIVATE_KEY = $defaultSigningKey
