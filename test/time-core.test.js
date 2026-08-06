@@ -100,17 +100,24 @@ test("keeps the NTP command's local timing sample", () => {
   assert.equal(sample.uncertaintyMs, 10);
 });
 
-test("keeps the selected precision across a refresh for standard and Mini values", () => {
+test("keeps the visible precision across first and later refreshes", () => {
   const value = "12:34:56.789";
+  const beforeFirstCalibration = formatTimePrecision(value, true, false);
+
+  assert.equal(
+    formatTimePrecision(value, getDisplayPrecision(true, false), true),
+    beforeFirstCalibration,
+    "first calibration should keep the seconds currently visible before calibration",
+  );
 
   for (const surface of ["standard", "Mini"]) {
     assert.equal(
-      formatTimePrecision(value, getDisplayPrecision(false, true, "millisecond"), true),
+      formatTimePrecision(value, getDisplayPrecision(false, true), true),
       "12:34:56",
       `${surface} should keep seconds`,
     );
     assert.equal(
-      formatTimePrecision(value, getDisplayPrecision(true, true, "second"), true),
+      formatTimePrecision(value, getDisplayPrecision(true, true), true),
       value,
       `${surface} should keep milliseconds`,
     );

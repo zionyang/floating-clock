@@ -325,7 +325,6 @@ async function syncSelectedSource() {
     state.showMilliseconds = getDisplayPrecision(
       state.showMilliseconds,
       hadValidOffset,
-      syncResult.precision,
     );
     state.hasValidOffset = true;
     updateTimePrecisionControls();

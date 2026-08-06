@@ -143,8 +143,8 @@ function selectBestSample(samples) {
   return [...samples].sort((left, right) => left.roundTripMs - right.roundTripMs)[0];
 }
 
-function getDisplayPrecision(currentShowMilliseconds, hasValidOffset, syncPrecision) {
-  return hasValidOffset ? currentShowMilliseconds : syncPrecision === "millisecond";
+function getDisplayPrecision(currentShowMilliseconds, hasValidOffset) {
+  return hasValidOffset && currentShowMilliseconds;
 }
 
 function formatTimePrecision(value, showMilliseconds, hasValidOffset) {
