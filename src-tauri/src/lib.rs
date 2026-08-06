@@ -23,6 +23,11 @@ use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_DEFAULT, DWMWA_COLOR_NONE,
     DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DEFAULT, DWMWCP_DONOTROUND,
 };
+#[cfg(windows)]
+use windows::{
+    core::{HSTRING, PCWSTR},
+    Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+};
 
 const SHORTCUT: &str = "Ctrl+Alt+T";
 const NTP_SERVERS: &[&str] = &[
@@ -39,6 +44,7 @@ const STANDARD_WINDOW_HEIGHT: f64 = 392.0;
 const MINI_WINDOW_MIN_WIDTH: f64 = 236.0;
 const MINI_WINDOW_MAX_WIDTH: f64 = 1200.0;
 const MINI_WINDOW_HEIGHT: f64 = 92.0;
+const DOWNLOAD_PAGE_URL: &str = "https://github.com/zionyang/floating-clock/releases/latest";
 
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
@@ -167,7 +173,48 @@ fn running_installed_build() -> bool {
         .is_some_and(|name| supports_self_update(Some(name)))
 }
 
-async fn check_for_update(app: AppHandle, install: bool, announce_current: bool) {
+#[cfg(windows)]
+fn open_download_page() -> Result<(), String> {
+    let url = HSTRING::from(DOWNLOAD_PAGE_URL);
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            PCWSTR::null(),
+            &url,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if result.0 as usize <= 32 {
+        Err(format!("ShellExecuteW failed: {}", result.0 as usize))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn open_download_page() -> Result<(), String> {
+    Err("opening the download page is only supported on Windows".to_owned())
+}
+
+fn update_available_label(installed_build: bool, version: &str) -> String {
+    format!(
+        "{} {version}",
+        if installed_build {
+            "安装更新"
+        } else {
+            "打开下载页"
+        }
+    )
+}
+
+async fn check_for_update(
+    app: AppHandle,
+    installed_build: bool,
+    install: bool,
+    announce_current: bool,
+) {
     let menu = app.state::<UpdateMenu>();
     if menu
         .busy
@@ -208,7 +255,9 @@ async fn check_for_update(app: AppHandle, install: bool, announce_current: bool)
     match result {
         Ok(Some(version)) if !install => {
             menu.available.store(true, Ordering::Relaxed);
-            let _ = menu.item.set_text(format!("安装更新 {version}"));
+            let _ = menu
+                .item
+                .set_text(update_available_label(installed_build, &version));
         }
         Ok(None) => {
             menu.available.store(false, Ordering::Relaxed);
@@ -681,17 +730,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         CheckMenuItem::with_id(app, "click-through", "鼠标穿透", true, false, None::<&str>)?;
     let separator_two = PredefinedMenuItem::separator(app)?;
     let installed_build = running_installed_build();
-    let update = MenuItem::with_id(
-        app,
-        "update",
-        if installed_build {
-            "检查更新"
-        } else {
-            "便携版不支持自动更新"
-        },
-        installed_build,
-        None::<&str>,
-    )?;
+    let update = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -734,7 +773,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         })
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
+        .on_menu_event(move |app, event| match event.id.as_ref() {
             "toggle" => toggle_window(app),
             "show" => show_window(app),
             "launch-at-login" => {
@@ -760,11 +799,22 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
                 let _ = apply_click_through(app, enabled);
             }
             "update" => {
-                let install = app.state::<UpdateMenu>().available.load(Ordering::Relaxed);
-                let app = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    check_for_update(app, install, true).await;
-                });
+                let available = app.state::<UpdateMenu>().available.load(Ordering::Relaxed);
+                if !installed_build && available {
+                    if let Err(error) = open_download_page() {
+                        eprintln!("Opening download page failed: {error}");
+                        let _ = app
+                            .state::<UpdateMenu>()
+                            .item
+                            .set_text("下载页打开失败（点击重试）");
+                    }
+                } else {
+                    let install = installed_build && available;
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        check_for_update(app, installed_build, install, true).await;
+                    });
+                }
             }
             "quit" => app.exit(0),
             _ => {}
@@ -846,12 +896,11 @@ pub fn run() {
                 }
             };
             setup_tray(app, shortcut_available)?;
-            if running_installed_build() {
-                let app = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    check_for_update(app, false, false).await;
-                });
-            }
+            let installed_build = running_installed_build();
+            let app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                check_for_update(app, installed_build, false, false).await;
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -863,7 +912,8 @@ mod tests {
     use super::{
         effective_topmost, normalize_mini_width, ntp_request_timestamp, ntp_timestamp,
         should_hide_window_for_shortcut, strategy_request, supports_self_update,
-        topmost_change_allowed, MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
+        topmost_change_allowed, update_available_label, DOWNLOAD_PAGE_URL, MINI_WINDOW_MAX_WIDTH,
+        MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
     };
 
     #[test]
@@ -932,5 +982,15 @@ mod tests {
             "FloatingClock-0.1.4-tauri-win-x64.exe"
         )));
         assert!(!supports_self_update(None));
+        assert_eq!(
+            DOWNLOAD_PAGE_URL,
+            "https://github.com/zionyang/floating-clock/releases/latest"
+        );
+    }
+
+    #[test]
+    fn update_action_matches_build_type() {
+        assert_eq!(update_available_label(true, "0.1.8"), "安装更新 0.1.8");
+        assert_eq!(update_available_label(false, "0.1.8"), "打开下载页 0.1.8");
     }
 }
