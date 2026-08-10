@@ -76,6 +76,8 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(var\(--color-text-rgb\), 0\.64\)[\s\S]*?font-size:\s*12px/);
   assert.match(css, /\.clock-shell\.mini:hover \.mini-actions/);
   assert.match(css, /\.clock-shell\.mini:hover \.mini-left-actions/);
+  assert.match(css, /\.clock-shell\.mini \.mini-actions\s*\{[\s\S]*?display:\s*flex/);
+  assert.match(css, /\.clock-shell\.mini \.mini-left-actions\s*\{[\s\S]*?display:\s*flex/);
   assert.match(css, /\.titlebar-drag-surface\s*\{[\s\S]*?right:\s*80px[\s\S]*?left:\s*80px/);
   assert.match(titlebarTooltipRule, /left:\s*50%/);
   assert.match(css, /\.titlebar-drag-surface:hover \.presentation-switch-tooltip\s*\{/);
@@ -85,7 +87,7 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /\.mini-left-actions\s*\{[\s\S]*?top:\s*50%[\s\S]*?left:\s*2px[\s\S]*?flex-direction:\s*column[\s\S]*?width:\s*24px/);
   assert.match(css, /\.mini-opacity-range\s*\{[\s\S]*?width:\s*18px[\s\S]*?height:\s*50px[\s\S]*?accent-color:\s*var\(--color-accent\)[\s\S]*?writing-mode:\s*vertical-lr[\s\S]*?direction:\s*rtl[\s\S]*?appearance:\s*none/);
   assert.match(css, /\.mini-opacity-range::-webkit-slider-runnable-track\s*\{[\s\S]*?width:\s*2px[\s\S]*?height:\s*50px[\s\S]*?linear-gradient\([\s\S]*?var\(--mini-opacity-progress\)/);
-  assert.match(css, /\.mini-opacity-range::-webkit-slider-thumb\s*\{[\s\S]*?width:\s*8px[\s\S]*?height:\s*4px[\s\S]*?transform:\s*translateX\(-3px\)[\s\S]*?appearance:\s*none/);
+  assert.match(css, /\.mini-opacity-range::-webkit-slider-thumb\s*\{[\s\S]*?width:\s*8px[\s\S]*?height:\s*4px[\s\S]*?transform:\s*translateX\(-6px\)[\s\S]*?appearance:\s*none/);
   assert.doesNotMatch(css, /mini-opacity-value|show-opacity-value/);
   assert.match(css, /\.mini-click-through-button\s*\{[\s\S]*?width:\s*14px[\s\S]*?height:\s*14px/);
   assert.match(css, /\.mini-click-through-button\.active\s*\{[\s\S]*?color:\s*var\(--color-accent\)/);

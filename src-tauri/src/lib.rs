@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     net::UdpSocket,
+    path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
         OnceLock,
@@ -208,17 +209,29 @@ fn handle_tray_icon_click(app: &AppHandle) {
     toggle_window_from_tray(app);
 }
 
-fn supports_self_update(exe_name: Option<&str>) -> bool {
-    // ponytail: the distributed portable file is renamed; use an installer marker if names converge.
-    exe_name.is_some_and(|name| name.eq_ignore_ascii_case("floating-clock.exe"))
+fn supports_self_update(executable: Option<&Path>, uninstaller: Option<&Path>) -> bool {
+    executable
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("floating-clock.exe"))
+        })
+        .and_then(Path::parent)
+        .zip(uninstaller)
+        .is_some_and(|(install_dir, marker)| marker == install_dir.join("uninstall.exe"))
 }
 
 fn running_installed_build() -> bool {
-    std::env::current_exe()
-        .ok()
-        .and_then(|path| path.file_name()?.to_str().map(str::to_owned))
+    let executable = std::env::current_exe().ok();
+    // The NSIS installer writes this marker beside the installed executable.
+    // Unknown layouts deliberately use the portable, download-page-only path.
+    let uninstaller = executable
         .as_deref()
-        .is_some_and(|name| supports_self_update(Some(name)))
+        .and_then(Path::parent)
+        .map(|install_dir| install_dir.join("uninstall.exe"))
+        .filter(|path| path.is_file());
+
+    supports_self_update(executable.as_deref(), uninstaller.as_deref())
 }
 
 #[cfg(windows)]
@@ -1062,13 +1075,29 @@ mod tests {
     }
 
     #[test]
-    fn only_installed_executable_name_enables_self_update() {
-        assert!(supports_self_update(Some("floating-clock.exe")));
-        assert!(supports_self_update(Some("FLOATING-CLOCK.EXE")));
-        assert!(!supports_self_update(Some(
-            "FloatingClock-0.1.4-tauri-win-x64.exe"
-        )));
-        assert!(!supports_self_update(None));
+    fn only_nsis_installed_executable_enables_self_update() {
+        let installed_executable =
+            std::path::Path::new(r"C:\Program Files\FloatingClock\floating-clock.exe");
+        let installed_uninstaller =
+            std::path::Path::new(r"C:\Program Files\FloatingClock\uninstall.exe");
+        let renamed_portable = std::path::Path::new(r"C:\Downloads\floating-clock.exe");
+        let versioned_portable =
+            std::path::Path::new(r"C:\Downloads\FloatingClock-0.1.8-tauri-win-x64.exe");
+
+        assert!(supports_self_update(
+            Some(installed_executable),
+            Some(installed_uninstaller)
+        ));
+        assert!(!supports_self_update(
+            Some(renamed_portable),
+            Some(installed_uninstaller)
+        ));
+        assert!(!supports_self_update(
+            Some(versioned_portable),
+            Some(installed_uninstaller)
+        ));
+        assert!(!supports_self_update(Some(installed_executable), None));
+        assert!(!supports_self_update(None, Some(installed_uninstaller)));
         assert_eq!(
             DOWNLOAD_PAGE_URL,
             "https://github.com/zionyang/floating-clock/releases/latest"
