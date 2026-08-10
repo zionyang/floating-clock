@@ -139,11 +139,21 @@
         </div>
       </details>
 
+      <div class="mini-left-actions" data-tauri-drag-region="false" aria-label="Mini 模式控制">
+        <input id="miniOpacityRange" class="mini-opacity-range" type="range" min="35" max="100" step="1" value="86" aria-label="Mini 模式透明度" />
+        <button id="miniClickThroughButton" class="mini-click-through-button" type="button" title="启用鼠标穿透（Ctrl+Alt+T 恢复）" aria-label="启用鼠标穿透（Ctrl+Alt+T 恢复）" aria-pressed="false">
+          <svg class="lucide-icon mini-click-through-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="m15.55 8.45 5.138 2.087a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063L8.45 15.551" />
+            <path d="M22 2 2 22" />
+            <path d="m6.816 11.528-2.779-6.84a.495.495 0 0 1 .651-.651l6.84 2.779" />
+          </svg>
+        </button>
+      </div>
+
       <section class="mini-panel" aria-label="Mini 模式时间" data-tauri-drag-region="deep">
         <p id="miniSource" class="mini-source">加载时间源…</p>
         <p id="miniValue" class="mini-value">--:--:--.---</p>
         <p id="miniDate" class="mini-date">等待校准</p>
-        <span class="time-precision-tooltip presentation-switch-tooltip mini-presentation-tooltip" role="tooltip">双击切换显示</span>
       </section>
       <div class="mini-actions" data-tauri-drag-region="false">
         <button id="miniCloseButton" class="mini-action" type="button" title="退出程序" aria-label="退出程序">

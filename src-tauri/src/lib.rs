@@ -147,6 +147,10 @@ fn should_hide_window_for_shortcut(visible: bool, focused: bool) -> bool {
     visible && focused
 }
 
+fn should_hide_window_from_tray(visible: bool) -> bool {
+    visible
+}
+
 fn toggle_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         if should_hide_window_for_shortcut(
@@ -158,6 +162,50 @@ fn toggle_window(app: &AppHandle) {
             show_window(app);
         }
     }
+}
+
+fn toggle_window_from_tray(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if should_hide_window_from_tray(window.is_visible().unwrap_or(false)) {
+            let _ = window.hide();
+        } else {
+            show_window(app);
+        }
+    }
+}
+
+fn restore_click_through(app: &AppHandle) -> bool {
+    let state = app.state::<ControlsState>();
+    let click_through = effective_click_through(
+        state.click_through.load(Ordering::Relaxed),
+        state.mini.load(Ordering::Relaxed),
+    );
+
+    if !click_through {
+        return false;
+    }
+
+    if let Err(error) = apply_click_through(app, false) {
+        eprintln!("Restoring mouse input failed: {error}");
+    }
+    show_window(app);
+    true
+}
+
+fn handle_global_shortcut(app: &AppHandle) {
+    if restore_click_through(app) {
+        return;
+    }
+
+    toggle_window(app);
+}
+
+fn handle_tray_icon_click(app: &AppHandle) {
+    if restore_click_through(app) {
+        return;
+    }
+
+    toggle_window_from_tray(app);
 }
 
 fn supports_self_update(exe_name: Option<&str>) -> bool {
@@ -287,13 +335,17 @@ fn window_controls(app: &AppHandle) -> Result<WindowControls, String> {
             .is_enabled()
             .map_err(|error| error.to_string())?,
         topmost: effective_topmost(state.standard_topmost.load(Ordering::Relaxed), mini),
-        click_through: state.click_through.load(Ordering::Relaxed),
+        click_through: effective_click_through(state.click_through.load(Ordering::Relaxed), mini),
         mini,
     })
 }
 
 fn effective_topmost(standard_topmost: bool, mini: bool) -> bool {
     mini || standard_topmost
+}
+
+fn effective_click_through(click_through: bool, mini: bool) -> bool {
+    click_through && mini
 }
 
 fn topmost_change_allowed(mini: bool) -> bool {
@@ -381,6 +433,7 @@ fn apply_presentation(
     let state = app.state::<ControlsState>();
     let previous_mini = state.mini.load(Ordering::Relaxed);
     let effective_topmost = effective_topmost(state.standard_topmost.load(Ordering::Relaxed), mini);
+    let click_through = effective_click_through(state.click_through.load(Ordering::Relaxed), mini);
     let width = if mini {
         normalize_mini_width(requested_width)
     } else {
@@ -405,9 +458,13 @@ fn apply_presentation(
         .set_shadow(!mini)
         .map_err(|error| error.to_string())?;
     window
+        .set_ignore_cursor_events(click_through)
+        .map_err(|error| error.to_string())?;
+    window
         .set_size(LogicalSize::new(width, height))
         .map_err(|error| error.to_string())?;
     state.mini.store(mini, Ordering::Relaxed);
+    state.click_through.store(click_through, Ordering::Relaxed);
     let menu = app.state::<ControlsMenu>();
     menu.mini
         .set_checked(mini)
@@ -417,6 +474,12 @@ fn apply_presentation(
         .map_err(|error| error.to_string())?;
     menu.topmost
         .set_enabled(!mini)
+        .map_err(|error| error.to_string())?;
+    menu.click_through
+        .set_checked(click_through)
+        .map_err(|error| error.to_string())?;
+    menu.click_through
+        .set_enabled(mini)
         .map_err(|error| error.to_string())?;
 
     let presentation = WindowPresentation { mini };
@@ -429,18 +492,22 @@ fn apply_presentation(
 }
 
 fn apply_click_through(app: &AppHandle, enabled: bool) -> Result<WindowControls, String> {
+    let state = app.state::<ControlsState>();
+    let mini = state.mini.load(Ordering::Relaxed);
+    let click_through = effective_click_through(enabled, mini);
     let window = app
         .get_webview_window("main")
         .ok_or("main window is unavailable")?;
     window
-        .set_ignore_cursor_events(enabled)
+        .set_ignore_cursor_events(click_through)
         .map_err(|error| error.to_string())?;
-    app.state::<ControlsState>()
-        .click_through
-        .store(enabled, Ordering::Relaxed);
-    app.state::<ControlsMenu>()
-        .click_through
-        .set_checked(enabled)
+    state.click_through.store(click_through, Ordering::Relaxed);
+    let menu = app.state::<ControlsMenu>();
+    menu.click_through
+        .set_checked(click_through)
+        .map_err(|error| error.to_string())?;
+    menu.click_through
+        .set_enabled(mini)
         .map_err(|error| error.to_string())?;
     emit_controls(app)
 }
@@ -448,6 +515,15 @@ fn apply_click_through(app: &AppHandle, enabled: bool) -> Result<WindowControls,
 #[tauri::command]
 fn get_window_controls(app: AppHandle) -> Result<WindowControls, String> {
     window_controls(&app)
+}
+
+#[tauri::command]
+fn enable_click_through(app: AppHandle) -> Result<WindowControls, String> {
+    if !app.state::<ControlsState>().mini.load(Ordering::Relaxed) {
+        return Err("鼠标穿透仅在 Mini 模式下可用".to_string());
+    }
+
+    apply_click_through(&app, true)
 }
 
 #[tauri::command]
@@ -714,7 +790,6 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         true,
         shortcut_available.then_some(SHORTCUT),
     )?;
-    let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let launch_at_login = CheckMenuItem::with_id(
         app,
@@ -727,7 +802,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
     let topmost = CheckMenuItem::with_id(app, "topmost", "窗口置顶", true, true, None::<&str>)?;
     let mini = CheckMenuItem::with_id(app, "mini-mode", "Mini 模式", true, false, None::<&str>)?;
     let click_through =
-        CheckMenuItem::with_id(app, "click-through", "鼠标穿透", true, false, None::<&str>)?;
+        CheckMenuItem::with_id(app, "click-through", "鼠标穿透", false, false, None::<&str>)?;
     let separator_two = PredefinedMenuItem::separator(app)?;
     let installed_build = running_installed_build();
     let update = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
@@ -736,7 +811,6 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         app,
         &[
             &show_hide,
-            &show,
             &separator,
             &launch_at_login,
             &topmost,
@@ -774,8 +848,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
-            "toggle" => toggle_window(app),
-            "show" => show_window(app),
+            "toggle" => toggle_window_from_tray(app),
             "launch-at-login" => {
                 let enabled = !app.autolaunch().is_enabled().unwrap_or(false);
                 let _ = set_launch_at_login(app.clone(), enabled);
@@ -828,7 +901,7 @@ fn setup_tray(app: &tauri::App, shortcut_available: bool) -> tauri::Result<()> {
                     ..
                 }
             ) {
-                toggle_window(tray.app_handle());
+                handle_tray_icon_click(tray.app_handle());
             }
         })
         .build(app)?;
@@ -845,7 +918,7 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _, event| {
                     if event.state() == ShortcutState::Pressed {
-                        toggle_window(app);
+                        handle_global_shortcut(app);
                     }
                 })
                 .build(),
@@ -876,6 +949,7 @@ pub fn run() {
             mini: AtomicBool::new(false),
         })
         .invoke_handler(tauri::generate_handler![
+            enable_click_through,
             get_window_controls,
             hide_window,
             quit,
@@ -910,10 +984,10 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        effective_topmost, normalize_mini_width, ntp_request_timestamp, ntp_timestamp,
-        should_hide_window_for_shortcut, strategy_request, supports_self_update,
-        topmost_change_allowed, update_available_label, DOWNLOAD_PAGE_URL, MINI_WINDOW_MAX_WIDTH,
-        MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
+        effective_click_through, effective_topmost, normalize_mini_width, ntp_request_timestamp,
+        ntp_timestamp, should_hide_window_for_shortcut, should_hide_window_from_tray,
+        strategy_request, supports_self_update, topmost_change_allowed, update_available_label,
+        DOWNLOAD_PAGE_URL, MINI_WINDOW_MAX_WIDTH, MINI_WINDOW_MIN_WIDTH, NTP_SERVERS,
     };
 
     #[test]
@@ -953,11 +1027,24 @@ mod tests {
     }
 
     #[test]
+    fn tray_toggle_hides_a_visible_window_without_requiring_focus() {
+        assert!(should_hide_window_from_tray(true));
+        assert!(!should_hide_window_from_tray(false));
+    }
+
+    #[test]
     fn mini_mode_forces_topmost_without_losing_standard_preference() {
         assert!(!effective_topmost(false, false));
         assert!(effective_topmost(true, false));
         assert!(effective_topmost(false, true));
         assert!(effective_topmost(true, true));
+    }
+
+    #[test]
+    fn click_through_only_applies_in_mini_mode() {
+        assert!(!effective_click_through(true, false));
+        assert!(!effective_click_through(false, true));
+        assert!(effective_click_through(true, true));
     }
 
     #[test]

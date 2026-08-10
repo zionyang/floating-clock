@@ -16,12 +16,16 @@ const elements = {
   minimizeButton: document.querySelector("#minimizeButton"),
   miniCloseButton: document.querySelector("#miniCloseButton"),
   miniDate: document.querySelector("#miniDate"),
+  miniLeftActions: document.querySelector(".mini-left-actions"),
   miniMinimizeButton: document.querySelector("#miniMinimizeButton"),
   miniModeButton: document.querySelector("#miniModeButton"),
+  miniOpacityRange: document.querySelector("#miniOpacityRange"),
   miniPanel: document.querySelector(".mini-panel"),
   miniRestoreButton: document.querySelector("#miniRestoreButton"),
   miniSource: document.querySelector("#miniSource"),
   miniValue: document.querySelector("#miniValue"),
+  miniActions: document.querySelector(".mini-actions"),
+  miniClickThroughButton: document.querySelector("#miniClickThroughButton"),
   reminderMenu: document.querySelector("#reminderMenu"),
   reminderSelect: document.querySelector("#reminderSelect"),
   sourceMenu: document.querySelector("#sourceMenu"),
@@ -60,6 +64,10 @@ const {
 
 const CRITICAL_WINDOW_MS = 5000;
 const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
+const MINI_OPACITY_MIN = 35;
+const MINI_OPACITY_MAX = 100;
+const MINI_OPACITY_DEFAULT = 86;
+const MINI_CLICK_THROUGH_RESTORE_FEEDBACK_MS = 650;
 const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
 const LOCAL_WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -74,6 +82,7 @@ const THEME_IDS = new Set(Object.keys(THEME_TITLES));
 const STORAGE_KEYS = {
   hourlyChime: "floatingClock.hourlyChime",
   hourlyHighlight: "floatingClock.hourlyHighlight",
+  miniOpacity: "floatingClock.miniOpacity",
   mode: "floatingClock.mode",
   sourceId: "floatingClock.sourceId",
   theme: "floatingClock.theme",
@@ -96,6 +105,9 @@ const state = {
   sourcePrecision: "unknown",
   sourceSupportsMilliseconds: null,
   topmost: true,
+  clickThrough: false,
+  miniClickThroughRestoreTimer: null,
+  miniOpacity: readStoredMiniOpacity(),
   miniResizeFrame: null,
   miniValueLength: null,
   miniWidth: MINI_WINDOW_MIN_WIDTH,
@@ -125,6 +137,7 @@ const beijingTimeFormatter = new Intl.DateTimeFormat("en-GB", {
 });
 
 applyTheme(state.theme, false);
+applyMiniOpacity(state.miniOpacity, false);
 bootstrap();
 
 async function bootstrap() {
@@ -199,20 +212,29 @@ function bindEvents() {
     setWindowPresentation(true);
   });
   elements.miniRestoreButton.addEventListener("click", (event) => {
-    if (event.detail > 1) return;
+    if (isMiniClickThroughActive() || event.detail > 1) return;
     markPresentationButtonAction();
     setWindowPresentation(false);
   });
   elements.miniCloseButton.addEventListener("click", (event) => {
-    if (event.detail > 1) return;
+    if (isMiniClickThroughActive() || event.detail > 1) return;
     window.floatingClock.close();
   });
   elements.miniMinimizeButton.addEventListener("click", (event) => {
-    if (event.detail > 1) return;
+    if (isMiniClickThroughActive() || event.detail > 1) return;
     window.floatingClock.minimize();
   });
+  [elements.miniLeftActions, elements.miniActions].forEach((container) => {
+    container.addEventListener("mousedown", suppressMiniControlDoubleClick, true);
+    container.addEventListener("dblclick", suppressMiniControlDoubleClick, true);
+  });
   elements.miniPanel.addEventListener("mousedown", (event) => {
-    if (state.presentation !== "mini" || event.button !== 0 || event.detail !== 2) {
+    if (
+      isMiniClickThroughActive()
+      || state.presentation !== "mini"
+      || event.button !== 0
+      || event.detail !== 2
+    ) {
       return;
     }
 
@@ -220,7 +242,29 @@ function bindEvents() {
     event.stopPropagation();
     setWindowPresentation(false);
   }, true);
-  elements.miniPanel.addEventListener("dblclick", () => setWindowPresentation(false));
+  elements.miniPanel.addEventListener("dblclick", () => {
+    if (isMiniClickThroughActive()) return;
+    setWindowPresentation(false);
+  });
+  elements.miniOpacityRange.addEventListener("input", (event) => {
+    if (state.presentation !== "mini" || isMiniClickThroughActive()) return;
+    applyMiniOpacity(event.target.value);
+  });
+  elements.miniClickThroughButton.addEventListener("click", async (event) => {
+    if (state.presentation !== "mini" || isMiniClickThroughActive() || event.detail > 1) {
+      return;
+    }
+
+    try {
+      updateWindowControls(await window.floatingClock.enableClickThrough());
+    } catch (error) {
+      console.error(error);
+    }
+  });
+  elements.clockShell.addEventListener("pointerleave", () => {
+    elements.clockShell.classList.remove("preserve-mini-controls-hover");
+    elements.miniClickThroughButton.classList.remove("suppress-hover");
+  });
   elements.syncButton.addEventListener("click", syncSelectedSource);
   elements.themeOptionButtons.forEach((button) => {
     button.addEventListener("click", () => applyTheme(button.dataset.theme));
@@ -372,6 +416,15 @@ function markPresentationButtonAction() {
 
 function suppressPresentationDoubleClick(event) {
   if (event.detail <= 1 || Date.now() >= state.presentationDoubleClickGuardUntil) {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function suppressMiniControlDoubleClick(event) {
+  if (event.detail <= 1) {
     return;
   }
 
@@ -795,6 +848,7 @@ function applyPresentation(mini) {
   state.presentation = nextPresentation;
   elements.clockShell.setAttribute("data-tauri-drag-region", "false");
   elements.clockShell.classList.toggle("mini", mini);
+  updateMiniInteractionState();
   void window.floatingClock.setWindowCornerPreference(mini && state.theme === "black");
   if (mini) {
     scheduleMiniResize(true);
@@ -840,11 +894,86 @@ function scheduleMiniResize(force = false) {
 }
 
 function updateWindowControls(controls) {
+  const wasClickThrough = state.clickThrough;
   state.launchAtLogin = Boolean(controls.launchAtLogin);
   state.topmost = Boolean(controls.topmost);
+  state.clickThrough = Boolean(controls.clickThrough);
+  const clickThroughLabel = state.clickThrough
+    ? "已启用鼠标穿透（Ctrl+Alt+T 恢复）"
+    : "启用鼠标穿透（Ctrl+Alt+T 恢复）";
+  elements.miniClickThroughButton.classList.toggle("active", state.clickThrough);
+  elements.miniClickThroughButton.title = clickThroughLabel;
+  elements.miniClickThroughButton.setAttribute("aria-label", clickThroughLabel);
+  elements.miniClickThroughButton.setAttribute("aria-pressed", String(state.clickThrough));
   elements.topmostButton.classList.toggle("active", state.topmost);
   elements.topmostButton.title = state.topmost ? "取消窗口置顶" : "窗口置顶";
   elements.topmostButton.setAttribute("aria-label", elements.topmostButton.title);
+  updateMiniInteractionState();
+  if (!wasClickThrough && state.clickThrough && state.presentation === "mini") {
+    showMiniClickThroughActivationFeedback();
+  } else if (wasClickThrough && !state.clickThrough && state.presentation === "mini") {
+    showMiniClickThroughRestoreFeedback();
+  } else if (state.presentation !== "mini") {
+    clearMiniClickThroughRestoreFeedback();
+    elements.clockShell.classList.remove("preserve-mini-controls-hover");
+    elements.miniClickThroughButton.classList.remove("suppress-hover");
+  }
+}
+
+function clearMiniClickThroughRestoreFeedback() {
+  if (state.miniClickThroughRestoreTimer !== null) {
+    window.clearTimeout(state.miniClickThroughRestoreTimer);
+    state.miniClickThroughRestoreTimer = null;
+  }
+  elements.clockShell.classList.remove("click-through-restored");
+  elements.miniClickThroughButton.classList.remove("restore-feedback");
+  elements.miniClickThroughButton.classList.remove("activate-feedback");
+}
+
+function showMiniClickThroughActivationFeedback() {
+  clearMiniClickThroughRestoreFeedback();
+  elements.clockShell.classList.remove("preserve-mini-controls-hover");
+  elements.miniClickThroughButton.classList.remove("suppress-hover");
+  void elements.miniClickThroughButton.offsetWidth;
+  elements.miniClickThroughButton.classList.add("activate-feedback");
+  state.miniClickThroughRestoreTimer = window.setTimeout(() => {
+    elements.miniClickThroughButton.classList.remove("activate-feedback");
+    state.miniClickThroughRestoreTimer = null;
+  }, MINI_CLICK_THROUGH_RESTORE_FEEDBACK_MS);
+}
+
+function showMiniClickThroughRestoreFeedback() {
+  clearMiniClickThroughRestoreFeedback();
+  elements.clockShell.classList.remove("preserve-mini-controls-hover");
+  elements.miniClickThroughButton.classList.remove("suppress-hover");
+  elements.miniClickThroughButton.blur();
+  void elements.miniClickThroughButton.offsetWidth;
+  elements.clockShell.classList.add("click-through-restored");
+  elements.miniClickThroughButton.classList.add("restore-feedback");
+  state.miniClickThroughRestoreTimer = window.setTimeout(() => {
+    if (elements.clockShell.matches(":hover")) {
+      elements.clockShell.classList.add("preserve-mini-controls-hover");
+      elements.miniClickThroughButton.classList.add("suppress-hover");
+    }
+    elements.clockShell.classList.remove("click-through-restored");
+    elements.miniClickThroughButton.classList.remove("restore-feedback");
+    state.miniClickThroughRestoreTimer = null;
+  }, MINI_CLICK_THROUGH_RESTORE_FEEDBACK_MS);
+}
+
+function isMiniClickThroughActive() {
+  return state.presentation === "mini" && state.clickThrough;
+}
+
+function updateMiniInteractionState() {
+  const disabled = isMiniClickThroughActive();
+  elements.clockShell.classList.toggle("click-through", disabled);
+  elements.miniOpacityRange.disabled = disabled;
+  elements.miniClickThroughButton.disabled = disabled;
+  [elements.miniCloseButton, elements.miniRestoreButton, elements.miniMinimizeButton]
+    .forEach((button) => {
+      button.disabled = disabled;
+    });
 }
 
 function getClockTimeParts(epochMs) {
@@ -1114,6 +1243,34 @@ function readStoredBoolean(key, fallback) {
 function readStoredTheme() {
   const theme = localStorage.getItem(STORAGE_KEYS.theme);
   return THEME_IDS.has(theme) ? theme : "amber";
+}
+
+function normalizeMiniOpacity(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return MINI_OPACITY_DEFAULT;
+  }
+
+  return Math.min(MINI_OPACITY_MAX, Math.max(MINI_OPACITY_MIN, Math.round(numeric)));
+}
+
+function readStoredMiniOpacity() {
+  const value = localStorage.getItem(STORAGE_KEYS.miniOpacity);
+  return value === null ? MINI_OPACITY_DEFAULT : normalizeMiniOpacity(value);
+}
+
+function applyMiniOpacity(value, persist = true) {
+  const opacity = normalizeMiniOpacity(value);
+  const progress = ((opacity - MINI_OPACITY_MIN) / (MINI_OPACITY_MAX - MINI_OPACITY_MIN)) * 100;
+  state.miniOpacity = opacity;
+  elements.clockShell.style.setProperty("--mini-opacity", String(opacity / 100));
+  elements.miniOpacityRange.value = String(opacity);
+  elements.miniOpacityRange.style.setProperty("--mini-opacity-progress", `${progress}%`);
+  elements.miniOpacityRange.setAttribute("aria-valuetext", `${opacity}%`);
+
+  if (persist) {
+    localStorage.setItem(STORAGE_KEYS.miniOpacity, String(opacity));
+  }
 }
 
 function applyTheme(theme, persist = true) {

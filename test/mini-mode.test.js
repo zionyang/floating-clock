@@ -31,10 +31,7 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(html, /id="miniSource" class="mini-source">加载时间源…<\/p>/);
   assert.match(html, /id="miniValue" class="mini-value"/);
   assert.match(html, /id="miniDate" class="mini-date">等待校准<\/p>/);
-  assert.match(
-    html,
-    /<span class="time-precision-tooltip presentation-switch-tooltip mini-presentation-tooltip" role="tooltip">双击切换显示<\/span>/,
-  );
+  assert.doesNotMatch(html, /mini-presentation-tooltip/);
   assert.doesNotMatch(html, /miniDragSurface/);
   assert.match(html, /<div class="mini-actions" data-tauri-drag-region="false">/);
   assert.match(
@@ -44,10 +41,16 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(html, /id="miniCloseButton" class="mini-action" type="button" title="退出程序"/);
   assert.match(html, /id="miniRestoreButton" class="mini-action" type="button" title="恢复标准模式"/);
   assert.match(html, /id="miniMinimizeButton" class="mini-action" type="button" title="隐藏到托盘"/);
+  assert.match(html, /<div class="mini-left-actions" data-tauri-drag-region="false" aria-label="Mini 模式控制">/);
+  assert.doesNotMatch(html, /miniOpacityValue|mini-opacity-value/);
+  assert.match(html, /id="miniOpacityRange" class="mini-opacity-range" type="range" min="35" max="100" step="1" value="86"/);
+  assert.match(html, /id="miniClickThroughButton" class="mini-click-through-button" type="button" title="启用鼠标穿透（Ctrl\+Alt\+T 恢复）"/);
+  assert.doesNotMatch(html, /miniClickThroughNotice|mini-click-through-notice|已穿透/);
+  assert.doesNotMatch(html, /miniClickThroughToggle|mini-click-through-toggle|mini-control-label|mini-control-hint|>穿透<\/span>/);
   assert.doesNotMatch(html, /id="miniHideButton"/);
-  assert.match(html, /<path d="m7 7 10 10" \/>/);
-  assert.match(html, /<path d="m17 7-10 10" \/>/);
-  assert.match(html, /<path d="M5 12h14" \/>/);
+  assert.match(html, /class="lucide-icon mini-click-through-icon"/);
+  assert.doesNotMatch(html, /mini-click-through-icon-off|mini-click-through-icon-on/);
+  assert.match(html, /<path d="M22 2 2 22" \/>/);
   const miniRule = css.match(/\.clock-shell\.mini\s*\{([^}]*)\}/)?.[1] || "";
   const blackMiniRule = css.match(/:root\[data-theme="black"\]\s*\.clock-shell\.mini\s*\{([^}]*)\}/)?.[1] || "";
   const titlebarTooltipRule = css.match(/\.titlebar-drag-surface \.presentation-switch-tooltip\s*\{([^}]*)\}/)?.[1] || "";
@@ -66,17 +69,28 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(css, /:root\[data-theme="sakura"\]\s*\.clock-shell\s*\{/);
   assert.doesNotMatch(miniRule, /0 0 0 1px/);
   assert.match(css, /\.clock-shell\.mini > :not\(\.mini-panel\):not\(\.mini-actions\)/);
+  assert.match(css, /\.clock-shell\.mini > :not\(\.mini-panel\):not\(\.mini-actions\):not\(\.mini-left-actions\)/);
   assert.match(css, /\.clock-shell\.mini \.mini-panel\s*\{[\s\S]*?grid-template-rows:\s*14px 40px 14px[\s\S]*?gap:\s*2px[\s\S]*?padding:\s*8px 14px[\s\S]*?align-items:\s*center/);
   assert.match(css, /\.mini-source\s*\{[\s\S]*?color:\s*var\(--color-mini-source\)[\s\S]*?font-size:\s*11px/);
   assert.match(css, /\.mini-value\s*\{[\s\S]*?font-size:\s*40px[\s\S]*?transform:\s*translateY\(-1px\)/);
   assert.match(css, /\.mini-date\s*\{[\s\S]*?color:\s*rgba\(var\(--color-text-rgb\), 0\.64\)[\s\S]*?font-size:\s*12px/);
   assert.match(css, /\.clock-shell\.mini:hover \.mini-actions/);
+  assert.match(css, /\.clock-shell\.mini:hover \.mini-left-actions/);
   assert.match(css, /\.titlebar-drag-surface\s*\{[\s\S]*?right:\s*80px[\s\S]*?left:\s*80px/);
   assert.match(titlebarTooltipRule, /left:\s*50%/);
-  assert.match(css, /\.titlebar-drag-surface:hover \.presentation-switch-tooltip,[\s\S]*?\.mini-panel:hover \.mini-presentation-tooltip/);
-  assert.match(css, /\.mini-presentation-tooltip\s*\{[\s\S]*?top:\s*auto[\s\S]*?bottom:\s*6px/);
+  assert.match(css, /\.titlebar-drag-surface:hover \.presentation-switch-tooltip\s*\{/);
+  assert.doesNotMatch(css, /mini-presentation-tooltip/);
   assert.match(css, /\.mini-actions\s*\{[\s\S]*?top:\s*50%[\s\S]*?right:\s*0[\s\S]*?flex-direction:\s*column/);
   assert.match(css, /\.mini-actions\s*\{[\s\S]*?transform:\s*translate\(4px, -50%\)/);
+  assert.match(css, /\.mini-left-actions\s*\{[\s\S]*?top:\s*50%[\s\S]*?left:\s*2px[\s\S]*?flex-direction:\s*column[\s\S]*?width:\s*24px/);
+  assert.match(css, /\.mini-opacity-range\s*\{[\s\S]*?width:\s*18px[\s\S]*?height:\s*50px[\s\S]*?accent-color:\s*var\(--color-accent\)[\s\S]*?writing-mode:\s*vertical-lr[\s\S]*?direction:\s*rtl[\s\S]*?appearance:\s*none/);
+  assert.match(css, /\.mini-opacity-range::-webkit-slider-runnable-track\s*\{[\s\S]*?width:\s*2px[\s\S]*?height:\s*50px[\s\S]*?linear-gradient\([\s\S]*?var\(--mini-opacity-progress\)/);
+  assert.match(css, /\.mini-opacity-range::-webkit-slider-thumb\s*\{[\s\S]*?width:\s*8px[\s\S]*?height:\s*4px[\s\S]*?transform:\s*translateX\(-3px\)[\s\S]*?appearance:\s*none/);
+  assert.doesNotMatch(css, /mini-opacity-value|show-opacity-value/);
+  assert.match(css, /\.mini-click-through-button\s*\{[\s\S]*?width:\s*14px[\s\S]*?height:\s*14px/);
+  assert.match(css, /\.mini-click-through-button\.active\s*\{[\s\S]*?color:\s*var\(--color-accent\)/);
+  assert.match(css, /\.mini-click-through-button:hover\s*\{[\s\S]*?color:\s*var\(--color-accent-text\)/);
+  assert.match(css, /\.mini-click-through-button \.mini-click-through-icon\s*\{[\s\S]*?width:\s*12px[\s\S]*?height:\s*12px/);
   assert.match(css, /\.mini-action\s*\{[\s\S]*?width:\s*22px[\s\S]*?height:\s*22px[\s\S]*?border-radius:\s*0/);
   assert.doesNotMatch(css, /\.mini-action:first-child/);
   assert.doesNotMatch(css, /\.mini-action:last-child/);
@@ -122,10 +136,17 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(app, /setWindowPresentation\(true\);/);
   assert.match(app, /elements\.miniCloseButton\.addEventListener\("click", \(event\) => \{/);
   assert.match(app, /elements\.miniMinimizeButton\.addEventListener\("click", \(event\) => \{/);
+  assert.match(app, /function suppressMiniControlDoubleClick\(event\)/);
+  assert.match(app, /elements\.miniOpacityRange\.addEventListener\("input", \(event\) => \{/);
+  assert.match(app, /elements\.miniClickThroughButton\.addEventListener\("click", async \(event\) => \{/);
+  assert.match(app, /window\.floatingClock\.enableClickThrough\(\)/);
+  assert.doesNotMatch(app, /showMiniOpacityValue|miniOpacityValueTimer|miniOpacityValue/);
+  assert.doesNotMatch(app, /showMiniClickThroughNotice|hideMiniClickThroughNotice|miniClickThroughNotice/);
+  assert.match(bridge, /enableClickThrough: \(\) => invoke\("enable_click_through"\)/);
   assert.match(app, /elements\.miniPanel\.addEventListener\("mousedown", \(event\) => \{/);
   assert.match(app, /event\.detail !== 2/);
   assert.match(app, /event\.stopPropagation\(\);/);
-  assert.match(app, /elements\.miniPanel\.addEventListener\("dblclick", \(\) => setWindowPresentation\(false\)\)/);
+  assert.match(app, /elements\.miniPanel\.addEventListener\("dblclick", \(\) => \{[\s\S]*?setWindowPresentation\(false\)/);
   assert.doesNotMatch(app, /startMiniWindowDrag/);
   assert.doesNotMatch(app, /startWindowDrag/);
   assert.doesNotMatch(app, /floatingClock\.presentation/);
@@ -145,6 +166,59 @@ test("Mini presentation buttons do not let the second click re-enter Mini mode",
   assert.match(app, /elements\.miniMinimizeButton\.addEventListener\("click", \(event\) => \{/);
   assert.match(app, /elements\.miniCloseButton\.addEventListener\("click", \(event\) => \{/);
   assert.match(app, /if \(event\.detail > 1\) return;/);
+});
+
+test("Mini click-through disables Mini interactions and applies transparency", () => {
+  const app = fs.readFileSync(rendererPath("app.js"), "utf8");
+  const css = fs.readFileSync(rendererPath("styles.css"), "utf8");
+  const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "lib.rs"), "utf8");
+
+  assert.match(rust, /fn effective_click_through\(click_through: bool, mini: bool\) -> bool \{\s*click_through && mini\s*\}/);
+  assert.match(rust, /set_ignore_cursor_events\(click_through\)/);
+  assert.match(rust, /click-through", "鼠标穿透", false, false/);
+  assert.match(app, /clickThrough: false/);
+  assert.match(app, /miniOpacity: readStoredMiniOpacity\(\)/);
+  assert.match(app, /function applyMiniOpacity\(value, persist = true\)/);
+  assert.match(app, /style\.setProperty\("--mini-opacity", String\(opacity \/ 100\)\)/);
+  assert.match(app, /const progress = \(\(opacity - MINI_OPACITY_MIN\) \/ \(MINI_OPACITY_MAX - MINI_OPACITY_MIN\)\) \* 100/);
+  assert.match(app, /style\.setProperty\("--mini-opacity-progress", `\$\{progress\}%`\)/);
+  assert.match(app, /function isMiniClickThroughActive\(\) \{[\s\S]*?state\.presentation === "mini" && state\.clickThrough/);
+  assert.match(app, /button\.disabled = disabled/);
+  assert.match(app, /elements\.miniClickThroughButton\.disabled = disabled/);
+  assert.match(app, /elements\.miniClickThroughButton\.setAttribute\("aria-label", clickThroughLabel\)/);
+  assert.match(app, /elements\.miniClickThroughButton\.title = clickThroughLabel/);
+  assert.match(app, /elements\.miniClickThroughButton\.setAttribute\("aria-pressed", String\(state\.clickThrough\)\)/);
+  assert.match(app, /const wasClickThrough = state\.clickThrough/);
+  assert.match(app, /if \(!wasClickThrough && state\.clickThrough && state\.presentation === "mini"\) \{\s*showMiniClickThroughActivationFeedback\(\);/);
+  assert.match(app, /if \(wasClickThrough && !state\.clickThrough && state\.presentation === "mini"\) \{\s*showMiniClickThroughRestoreFeedback\(\);\s*\}/);
+  assert.match(app, /function showMiniClickThroughRestoreFeedback\(\) \{[\s\S]*?classList\.add\("click-through-restored"\)[\s\S]*?classList\.add\("restore-feedback"\)[\s\S]*?MINI_CLICK_THROUGH_RESTORE_FEEDBACK_MS/);
+  assert.match(app, /function showMiniClickThroughActivationFeedback\(\) \{[\s\S]*?classList\.add\("activate-feedback"\)[\s\S]*?MINI_CLICK_THROUGH_RESTORE_FEEDBACK_MS/);
+  assert.match(app, /if \(elements\.clockShell\.matches\(":hover"\)\) \{[\s\S]*?classList\.add\("preserve-mini-controls-hover"\)[\s\S]*?classList\.add\("suppress-hover"\)/);
+  assert.match(app, /elements\.clockShell\.addEventListener\("pointerleave", \(\) => \{[\s\S]*?classList\.remove\("preserve-mini-controls-hover"\)[\s\S]*?classList\.remove\("suppress-hover"\)/);
+  assert.doesNotMatch(app, /suppress-mini-controls-hover/);
+  assert.match(app, /if \(isMiniClickThroughActive\(\) \|\| event\.detail > 1\) return;/);
+  assert.match(app, /elements\.miniPanel\.addEventListener\("dblclick", \(\) => \{[\s\S]*?isMiniClickThroughActive\(\)/);
+  assert.match(css, /\.clock-shell\.mini\s*\{[\s\S]*?opacity:\s*var\(--mini-opacity,\s*0\.86\)/);
+  assert.match(css, /\.clock-shell\.mini\.click-through \.mini-actions\s*\{[\s\S]*?display:\s*none !important/);
+  assert.match(css, /\.clock-shell\.mini\.click-through \.mini-left-actions\s*\{[\s\S]*?opacity:\s*1[\s\S]*?pointer-events:\s*none[\s\S]*?transform:\s*translate\(0, -50%\)/);
+  assert.match(css, /\.clock-shell\.mini\.click-through \.mini-opacity-range\s*\{[\s\S]*?visibility:\s*hidden/);
+  assert.match(css, /\.clock-shell\.mini\.click-through \.mini-click-through-button\s*\{[\s\S]*?color:\s*var\(--color-accent\)/);
+  assert.match(css, /\.clock-shell\.mini\.click-through-restored \.mini-left-actions\s*\{[\s\S]*?opacity:\s*1[\s\S]*?pointer-events:\s*none/);
+  assert.match(css, /\.clock-shell\.mini\.preserve-mini-controls-hover \.mini-left-actions[\s\S]*?opacity:\s*1[\s\S]*?pointer-events:\s*auto[\s\S]*?translate\(0, -50%\)/);
+  assert.doesNotMatch(css, /suppress-mini-controls-hover/);
+  assert.match(css, /\.mini-click-through-button\.restore-feedback\s*\{[\s\S]*?animation:\s*mini-click-through-restore/);
+  assert.match(css, /\.mini-click-through-button\.activate-feedback\s*\{[\s\S]*?animation:\s*mini-click-through-activate/);
+  assert.match(css, /\.mini-click-through-button\.suppress-hover[\s\S]*?color:\s*var\(--color-fg\)/);
+  assert.match(css, /@keyframes mini-click-through-restore\s*\{[\s\S]*?transform:\s*scale\(1\.18\)[\s\S]*?color:\s*var\(--color-fg\)/);
+  assert.match(css, /@keyframes mini-click-through-activate\s*\{[\s\S]*?transform:\s*scale\(1\.18\)[\s\S]*?color:\s*var\(--color-accent\)/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.mini-click-through-button\.restore-feedback,[\s\S]*?\.mini-click-through-button\.activate-feedback[\s\S]*?animation:\s*none/);
+  assert.doesNotMatch(css, /\.mini-click-through-notice|miniClickThroughNotice/);
+  assert.doesNotMatch(css, /mini-presentation-tooltip/);
+  assert.match(rust, /fn enable_click_through\(app: AppHandle\)/);
+  assert.match(rust, /鼠标穿透仅在 Mini 模式下可用/);
+  assert.match(rust, /fn handle_global_shortcut\(app: &AppHandle\)/);
+  assert.match(rust, /fn restore_click_through\(app: &AppHandle\) -> bool/);
+  assert.match(rust, /if event\.state\(\) == ShortcutState::Pressed \{\s*handle_global_shortcut\(app\);\s*\}/);
 });
 
 test("Presentation changes clear stale focus before applying the new layout", () => {

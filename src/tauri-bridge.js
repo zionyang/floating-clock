@@ -14,6 +14,7 @@
     requestNtpTime: () => invoke("request_ntp_time"),
     requestTime: (strategyId) => invoke("request_time", { strategyId }),
     getWindowControls: () => invoke("get_window_controls"),
+    enableClickThrough: () => invoke("enable_click_through"),
     setLaunchAtLogin: (enabled) => invoke("set_launch_at_login", { enabled }),
     setTopmost: (enabled) => invoke("set_topmost", { enabled }),
     setWindowPresentation: (mini, width) => invoke("set_window_presentation", { mini, width }),
