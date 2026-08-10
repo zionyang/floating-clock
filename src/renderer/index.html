@@ -28,8 +28,7 @@
         </span>
         <span id="titleName" class="title-name">
           <span id="titleSubtitle" class="title-subtitle">AMBER</span>
-          <span id="titleMain" class="title-main">悬浮时钟</span>
-          <span id="titleBadge" class="title-theme-badge">🌙</span>
+          <span class="title-main">悬浮时钟</span>
         </span>
         <div class="window-actions" data-tauri-drag-region="false">
           <button id="minimizeButton" class="titlebar-action" type="button" title="隐藏到托盘" aria-label="隐藏到托盘">
@@ -110,17 +109,24 @@
       </dialog>
 
       <details id="themeMenu" class="theme-menu">
-        <summary id="themeSelect" class="theme-select" title="切换主题" aria-label="切换主题">🎨</summary>
-        <div id="themeOptions" class="theme-options" aria-label="主题">
-          <button class="theme-option" type="button" data-theme="amber">琥珀暗</button>
-          <button class="theme-option" type="button" data-theme="light">晨雾浅</button>
-          <button class="theme-option" type="button" data-theme="black">墨玉黑</button>
-          <button class="theme-option" type="button" data-theme="sakura">樱粉</button>
+        <summary id="themeSelect" class="theme-select" title="切换主题" aria-label="切换主题，当前为月亮主题">
+          <span id="themeSelectIcon" class="theme-select-icon" aria-hidden="true">🌙</span>
+        </summary>
+        <div id="themeOptions" class="theme-options" aria-label="其他主题">
+          <button class="theme-option" type="button" data-theme="amber" aria-label="切换到月亮主题"><span class="theme-option-icon" aria-hidden="true">🌙</span></button>
+          <button class="theme-option" type="button" data-theme="light" aria-label="切换到太阳主题"><span class="theme-option-icon" aria-hidden="true">☀️</span></button>
+          <button class="theme-option" type="button" data-theme="black" aria-label="切换到玉绿主题"><span class="theme-option-icon" aria-hidden="true">🟢</span></button>
+          <button class="theme-option" type="button" data-theme="sakura" aria-label="切换到樱花主题"><span class="theme-option-icon" aria-hidden="true">🌸</span></button>
         </div>
       </details>
 
       <details id="reminderMenu" class="reminder-menu">
-        <summary id="reminderSelect" class="reminder-select" title="整点提醒" aria-label="整点提醒">🔔</summary>
+        <summary id="reminderSelect" class="reminder-select" title="整点提醒" aria-label="整点提醒">
+          <svg class="lucide-icon reminder-select-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+            <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
+          </svg>
+        </summary>
         <div id="reminderOptions" class="reminder-options" aria-label="整点提醒设置">
           <label class="reminder-option">
             <span class="reminder-option-copy">

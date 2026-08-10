@@ -41,13 +41,11 @@ const elements = {
   targetPickerShield: document.querySelector("#targetPickerShield"),
   targetPickerTrigger: document.querySelector("#targetPickerTrigger"),
   themeMenu: document.querySelector("#themeMenu"),
-  themeOptions: document.querySelector("#themeOptions"),
   themeSelect: document.querySelector("#themeSelect"),
+  themeSelectIcon: document.querySelector("#themeSelectIcon"),
   themeOptionButtons: document.querySelectorAll(".theme-option"),
-  titlebar: document.querySelector(".titlebar"),
-  titleBadge: document.querySelector("#titleBadge"),
-  titleMain: document.querySelector("#titleMain"),
   titleSubtitle: document.querySelector("#titleSubtitle"),
+  titlebar: document.querySelector(".titlebar"),
   quickTargetButtons: document.querySelectorAll("[data-quick-target]"),
 };
 const {
@@ -72,13 +70,13 @@ const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
 const LOCAL_WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const PRESENTATION_DOUBLE_CLICK_GUARD_MS = 500;
-const THEME_TITLES = {
-  amber: { title: "悬浮时钟", badge: "🌙", subtitle: "AMBER" },
-  light: { title: "悬浮时钟", badge: "☀️", subtitle: "MIST" },
-  black: { title: "悬浮时钟", badge: "🟢", subtitle: "JADE" },
-  sakura: { title: "悬浮时钟", badge: "🌸", subtitle: "SAKURA" },
+const THEME_DEFINITIONS = {
+  amber: { titleName: "AMBER", icon: "🌙", accessibleName: "月亮主题" },
+  light: { titleName: "MIST", icon: "☀️", accessibleName: "太阳主题" },
+  black: { titleName: "JADE", icon: "🟢", accessibleName: "玉绿主题" },
+  sakura: { titleName: "SAKURA", icon: "🌸", accessibleName: "樱花主题" },
 };
-const THEME_IDS = new Set(Object.keys(THEME_TITLES));
+const THEME_IDS = new Set(Object.keys(THEME_DEFINITIONS));
 const STORAGE_KEYS = {
   hourlyChime: "floatingClock.hourlyChime",
   hourlyHighlight: "floatingClock.hourlyHighlight",
@@ -1280,18 +1278,17 @@ function applyTheme(theme, persist = true) {
 
   state.theme = theme;
   document.documentElement.dataset.theme = theme;
-  elements.titleMain.textContent = THEME_TITLES[theme].title;
-  elements.titleBadge.textContent = THEME_TITLES[theme].badge;
-  elements.titleSubtitle.textContent = THEME_TITLES[theme].subtitle;
+  const themeDefinition = THEME_DEFINITIONS[theme];
+  elements.titleSubtitle.textContent = themeDefinition.titleName;
+  elements.themeSelectIcon.textContent = themeDefinition.icon;
   elements.themeMenu.open = false;
 
   elements.themeOptionButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.theme === theme));
+    button.hidden = button.dataset.theme === theme;
   });
 
-  const label = elements.themeOptions.querySelector(`[data-theme="${theme}"]`)?.textContent || "琥珀暗";
-  elements.themeSelect.title = `切换主题（当前：${label}）`;
-  elements.themeSelect.setAttribute("aria-label", elements.themeSelect.title);
+  elements.themeSelect.title = "切换主题";
+  elements.themeSelect.setAttribute("aria-label", `切换主题，当前为${themeDefinition.accessibleName}`);
   void window.floatingClock.setWindowCornerPreference(
     state.presentation === "mini" && theme === "black",
   );

@@ -523,13 +523,6 @@ select {
   font-weight: 700;
 }
 
-.title-theme-badge {
-  align-self: center;
-  font-family: "Segoe UI Emoji", sans-serif;
-  font-size: 15px;
-  line-height: 1;
-}
-
 .title-subtitle {
   color: rgba(var(--color-text-rgb), 0.58);
   font-family: "Segoe UI", sans-serif;
@@ -574,14 +567,25 @@ select {
   background: transparent;
   place-items: center;
   list-style: none;
-  font-family: "Segoe UI Emoji", sans-serif;
-  font-size: 16px;
-  line-height: 1;
+  color: var(--color-fg);
   cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
 .theme-select::-webkit-details-marker {
   display: none;
+}
+
+.theme-select-icon,
+.theme-option-icon {
+  display: block;
+  font-family: "Segoe UI Emoji", sans-serif;
+  line-height: 1;
+}
+
+.theme-select-icon {
+  font-size: 18px;
+  transition: transform 140ms ease;
 }
 
 .theme-options {
@@ -589,9 +593,10 @@ select {
   z-index: 20;
   bottom: calc(100% + 8px);
   right: 0;
-  width: 132px;
-  display: grid;
-  gap: 2px;
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   padding: 4px;
   border: 1px solid rgba(var(--color-accent-rgb), 0.32);
   border-radius: var(--radius-shell);
@@ -604,36 +609,54 @@ select {
 }
 
 .theme-option {
-  width: 100%;
-  min-height: 32px;
-  padding: 0 10px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  display: grid;
+  padding: 0;
   border: 0;
   border-radius: var(--radius-option);
   background: transparent;
   color: rgba(var(--color-text-rgb), 0.78);
-  text-align: left;
+  place-items: center;
   cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.theme-option-icon {
+  font-size: 17px;
 }
 
 .theme-option:hover,
 .theme-option:focus-visible {
   outline: 0;
   background: rgba(var(--color-surface-rgb), 0.1);
-}
-
-.theme-option[aria-pressed="true"] {
-  background: rgba(var(--color-accent-rgb), 0.18);
-  color: var(--color-accent-text);
-  font-weight: 700;
-}
-
-.theme-option[aria-pressed="true"]::after {
-  float: right;
-  content: "✓";
+  transform: translateY(-1px) scale(1.06);
 }
 
 .theme-select:hover,
 .theme-select:focus-visible,
+.theme-menu[open] .theme-select {
+  background: rgba(var(--color-accent-rgb), 0.16);
+  box-shadow: 0 0 0 1px rgba(var(--color-accent-rgb), 0.32), 0 6px 14px rgba(var(--color-shadow-rgb), 0.2);
+}
+
+.theme-select:hover,
+.theme-select:focus-visible {
+  transform: translateY(-1px) scale(1.06);
+}
+
+.theme-select:focus-visible {
+  outline: 1px solid rgba(var(--color-accent-rgb), 0.78);
+  outline-offset: 2px;
+}
+
+.theme-select:hover .theme-select-icon,
+.theme-select:focus-visible .theme-select-icon,
+.theme-menu[open] .theme-select-icon {
+  transform: scale(1.08);
+}
+
 .reminder-select:hover,
 .reminder-select:focus-visible {
   background: rgba(var(--color-surface-rgb), 0.1);
@@ -649,9 +672,6 @@ select {
   background: transparent;
   place-items: center;
   list-style: none;
-  font-family: "Segoe UI Emoji", sans-serif;
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -778,6 +798,11 @@ select {
   stroke-linecap: round;
   stroke-linejoin: round;
   vertical-align: middle;
+}
+
+.reminder-select .lucide-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .titlebar-action:hover,

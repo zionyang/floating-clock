@@ -10,7 +10,7 @@ const app = fs.readFileSync(path.join(rendererDir, "app.js"), "utf8");
 
 test("整点提醒使用独立弹出层，不改变固定布局", () => {
   assert.match(html, /<details id="reminderMenu" class="reminder-menu">/);
-  assert.match(html, /<summary id="reminderSelect" class="reminder-select"[^>]*>🔔<\/summary>/);
+  assert.match(html, /<summary id="reminderSelect" class="reminder-select"[^>]*>\s*<svg class="lucide-icon reminder-select-icon"[\s\S]*?<path d="M10\.268 21a2 2 0 0 0 3\.464 0" \/>/);
   assert.doesNotMatch(html, /class="reminder-title"/);
   assert.match(html, /id="hourlyHighlightToggle"[^>]*type="checkbox"[^>]*role="switch"/);
   assert.match(html, /id="hourlyChimeToggle"[^>]*type="checkbox"[^>]*role="switch"/);
