@@ -138,6 +138,11 @@ test("Mini mode uses native dragging, ordered window controls, and standard-titl
   assert.match(app, /elements\.miniMinimizeButton\.addEventListener\("click", \(event\) => \{/);
   assert.match(app, /function suppressMiniControlDoubleClick\(event\)/);
   assert.match(app, /elements\.miniOpacityRange\.addEventListener\("input", \(event\) => \{/);
+  assert.match(app, /const MINI_OPACITY_WHEEL_DELTA_PER_STEP = 100/);
+  assert.match(app, /miniOpacityWheelDelta: 0/);
+  assert.match(app, /elements\.miniOpacityRange\.addEventListener\("wheel", \(event\) => \{[\s\S]*?state\.presentation !== "mini" \|\| isMiniClickThroughActive\(\)[\s\S]*?event\.preventDefault\(\);[\s\S]*?applyMiniOpacityWheelDelta\(getMiniOpacityWheelDelta\(event\)\);[\s\S]*?\}, \{ passive: false \}\);/);
+  assert.match(app, /function getMiniOpacityWheelDelta\(event\) \{[\s\S]*?event\.deltaMode === 1[\s\S]*?event\.deltaY \* 40[\s\S]*?event\.deltaMode === 2[\s\S]*?MINI_OPACITY_WHEEL_DELTA_PER_STEP/);
+  assert.match(app, /function applyMiniOpacityWheelDelta\(delta\) \{[\s\S]*?Math\.sign\(state\.miniOpacityWheelDelta\)[\s\S]*?Math\.trunc\(state\.miniOpacityWheelDelta \/ MINI_OPACITY_WHEEL_DELTA_PER_STEP\)[\s\S]*?applyMiniOpacity\(state\.miniOpacity - steps\)/);
   assert.match(app, /elements\.miniClickThroughButton\.addEventListener\("click", async \(event\) => \{/);
   assert.match(app, /window\.floatingClock\.enableClickThrough\(\)/);
   assert.doesNotMatch(app, /showMiniOpacityValue|miniOpacityValueTimer|miniOpacityValue/);

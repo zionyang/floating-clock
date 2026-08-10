@@ -65,6 +65,7 @@ const AUTO_SYNC_INTERVAL_MS = 10 * 60_000;
 const MINI_OPACITY_MIN = 35;
 const MINI_OPACITY_MAX = 100;
 const MINI_OPACITY_DEFAULT = 86;
+const MINI_OPACITY_WHEEL_DELTA_PER_STEP = 100;
 const MINI_CLICK_THROUGH_RESTORE_FEEDBACK_MS = 650;
 const MINI_WINDOW_MIN_WIDTH = 236;
 const STANDARD_WINDOW_WIDTH = 392;
@@ -106,6 +107,7 @@ const state = {
   clickThrough: false,
   miniClickThroughRestoreTimer: null,
   miniOpacity: readStoredMiniOpacity(),
+  miniOpacityWheelDelta: 0,
   miniResizeFrame: null,
   miniValueLength: null,
   miniWidth: MINI_WINDOW_MIN_WIDTH,
@@ -248,6 +250,11 @@ function bindEvents() {
     if (state.presentation !== "mini" || isMiniClickThroughActive()) return;
     applyMiniOpacity(event.target.value);
   });
+  elements.miniOpacityRange.addEventListener("wheel", (event) => {
+    if (state.presentation !== "mini" || isMiniClickThroughActive()) return;
+    event.preventDefault();
+    applyMiniOpacityWheelDelta(getMiniOpacityWheelDelta(event));
+  }, { passive: false });
   elements.miniClickThroughButton.addEventListener("click", async (event) => {
     if (state.presentation !== "mini" || isMiniClickThroughActive() || event.detail > 1) {
       return;
@@ -844,6 +851,7 @@ function applyPresentation(mini) {
   }
 
   state.presentation = nextPresentation;
+  state.miniOpacityWheelDelta = 0;
   elements.clockShell.setAttribute("data-tauri-drag-region", "false");
   elements.clockShell.classList.toggle("mini", mini);
   updateMiniInteractionState();
@@ -1255,6 +1263,34 @@ function normalizeMiniOpacity(value) {
 function readStoredMiniOpacity() {
   const value = localStorage.getItem(STORAGE_KEYS.miniOpacity);
   return value === null ? MINI_OPACITY_DEFAULT : normalizeMiniOpacity(value);
+}
+
+function getMiniOpacityWheelDelta(event) {
+  if (event.deltaMode === 1) {
+    return event.deltaY * 40;
+  }
+  if (event.deltaMode === 2) {
+    return event.deltaY * MINI_OPACITY_WHEEL_DELTA_PER_STEP;
+  }
+  return event.deltaY;
+}
+
+function applyMiniOpacityWheelDelta(delta) {
+  if (!Number.isFinite(delta) || delta === 0) return;
+
+  if (
+    state.miniOpacityWheelDelta !== 0
+    && Math.sign(state.miniOpacityWheelDelta) !== Math.sign(delta)
+  ) {
+    state.miniOpacityWheelDelta = 0;
+  }
+
+  state.miniOpacityWheelDelta += delta;
+  const steps = Math.trunc(state.miniOpacityWheelDelta / MINI_OPACITY_WHEEL_DELTA_PER_STEP);
+  if (steps === 0) return;
+
+  state.miniOpacityWheelDelta -= steps * MINI_OPACITY_WHEEL_DELTA_PER_STEP;
+  applyMiniOpacity(state.miniOpacity - steps);
 }
 
 function applyMiniOpacity(value, persist = true) {
